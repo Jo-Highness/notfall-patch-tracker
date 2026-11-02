@@ -56,7 +56,7 @@ CMD ["npt-run"]
 # erzeugen nur eine neue Metadaten-Schicht, die Schichten darueber bleiben im Cache.
 #   docker build --build-arg NPT_REVISION="$(git rev-parse HEAD)" \
 #                --build-arg NPT_SOURCE_URL=https://github.com/<owner>/notfall-patch-tracker .
-ARG NPT_VERSION=0.1.0
+ARG NPT_VERSION=0.2.0
 ARG NPT_REVISION=""
 ARG NPT_SOURCE_URL=""
 LABEL org.opencontainers.image.title="notfall-patch-tracker" \

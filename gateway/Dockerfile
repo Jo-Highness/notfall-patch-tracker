@@ -19,7 +19,7 @@ STOPSIGNAL SIGQUIT
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # OCI-Metadaten (J15), Build-Args wie im App-Dockerfile.
-ARG NPT_VERSION=0.1.0
+ARG NPT_VERSION=0.2.0
 ARG NPT_REVISION=""
 ARG NPT_SOURCE_URL=""
 LABEL org.opencontainers.image.title="notfall-patch-tracker-gateway" \

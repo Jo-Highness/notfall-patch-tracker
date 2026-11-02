@@ -82,11 +82,11 @@ Beim Release (Tag `vX.Y.Z`) die `*.cdx.json` an das Release hängen, z. B. mit d
 GitHub-CLI:
 
 ```bash
-gh release create v0.1.0 --notes-file CHANGELOG-0.1.0.md \
-  sbom/notfall-patch-tracker-0.1.0-source.cdx.json \
-  sbom/notfall-patch-tracker-0.1.0-app.cdx.json \
-  sbom/notfall-patch-tracker-0.1.0-gateway.cdx.json \
-  sbom/notfall-patch-tracker-0.1.0-tls-proxy.cdx.json
+gh release create v0.2.0 --notes-file CHANGELOG-0.2.0.md \
+  sbom/notfall-patch-tracker-0.2.0-source.cdx.json \
+  sbom/notfall-patch-tracker-0.2.0-app.cdx.json \
+  sbom/notfall-patch-tracker-0.2.0-gateway.cdx.json \
+  sbom/notfall-patch-tracker-0.2.0-tls-proxy.cdx.json
 ```
 
 Werden die Abbilder in eine Registry veröffentlicht, sollte die SBOM aus genau dem
@@ -101,7 +101,7 @@ an das Abbild in der Registry binden (Schlüssel aus dem eigenen Secret-Store, n
 ```bash
 IMG=ghcr.io/<owner>/notfall-patch-tracker@sha256:<digest>
 cosign attest --yes --key cosign.key --type cyclonedx \
-  --predicate sbom/notfall-patch-tracker-0.1.0-app.cdx.json "$IMG"
+  --predicate sbom/notfall-patch-tracker-0.2.0-app.cdx.json "$IMG"
 cosign verify-attestation --key cosign.pub --type cyclonedx "$IMG"
 ```
 

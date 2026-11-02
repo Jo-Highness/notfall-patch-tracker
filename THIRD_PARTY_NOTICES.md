@@ -6,7 +6,7 @@ nutzt die folgenden Komponenten Dritter unter deren eigenen Lizenzen. Maschinenl
 Die Lizenzprüfung der Python-Laufzeitabhängigkeiten ist automatisiert:
 `scripts/check-licenses.sh` (schlägt bei GPL/AGPL oder fehlender Lizenzangabe fehl).
 
-Stand: Version 0.1.0, `requirements.lock` und `src/npt/static/vendor` dieses Commits.
+Stand: Version 0.2.0, `requirements.lock` und `src/npt/static/vendor` dieses Commits.
 
 ## 1. Im Repository mitgelieferte Browser-Bibliotheken (`src/npt/static/vendor`)
 
