@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Freischaltung anfragen – Notfall-Patch-Tracker{% endblock %}
+{% block content %}
+<h1>Kein Admin-Zugang</h1>
+<p>Ihr Client-Zertifikat ist gültig, für den ermittelten Identifier ist aber (noch) kein Admin-Recht hinterlegt.</p>
+<dl class="facts">
+  <dt>Ermittelter Identifier ({{ id_kind_label }})</dt>
+  <dd><code id="own-identifier">{{ principal.primary or "– nicht ermittelbar –" }}</code></dd>
+  <dt>Subject-DN</dt><dd>{{ principal.subject_dn }}</dd>
+  <dt>Aussteller</dt><dd>{{ principal.issuer_dn }}</dd>
+</dl>
+{% if pending %}
+<p class="msg msg-ok">Ihre Freischaltungsanfrage vom {{ pending.requested_at | dt }} ist offen. Ein Admin muss sie bestätigen.</p>
+{% elif principal.primary %}
+<form method="post" action="/admin/zugang/anfrage">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit" class="btn btn-primary">Freischaltung anfragen</button>
+</form>
+{% endif %}
+{% endblock %}

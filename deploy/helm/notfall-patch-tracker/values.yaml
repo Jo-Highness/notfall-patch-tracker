@@ -1,0 +1,258 @@
+# Notfall-Patch-Tracker – Helm-Werte (NPT-12). Pflicht: publicBaseUrl, adminBaseUrl,
+# image.*.repository, database.host (oder database.urlKey), secrets.existingSecret
+# (oder secrets.create nur fuer Dev/Test), admin.tls.secretName, admin.clientCa.
+# Beispiele: examples/values-kind.yaml, Doku: docs/KUBERNETES.md.
+
+image:
+  app:
+    registry: ""            # z. B. ghcr.io
+    repository: ""          # z. B. <owner>/notfall-patch-tracker
+    tag: ""                 # Default: appVersion des Charts; nie latest
+    digest: ""              # sha256:... – im Betrieb empfohlen (Digest-Betrieb)
+    pullPolicy: IfNotPresent
+  gateway:
+    registry: ""
+    repository: ""          # z. B. <owner>/notfall-patch-tracker-gateway
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Oeffentliche Basis-URLs (Origin-Pruefung, Links in Mails). Pflicht.
+publicBaseUrl: ""           # z. B. https://npt.example.org
+adminBaseUrl: ""            # z. B. https://npt-admin.example.org
+
+config:
+  logLevel: INFO
+  displayTz: Europe/Berlin
+  adminCertIdAttribute: subject_dn   # subject_dn | san_email | san_upn | fingerprint_sha256
+  adminBootstrapIds: []              # Liste, z. B. ["CN=Admin,O=Beispiel"]
+  uploadMaxMb: 20
+  mailRatePerSec: 5
+  rateLimit:
+    writes: 30
+    writesWindowS: 10
+    create: 10
+    createWindowS: 60
+  smtp:
+    host: ""                # leer = Mailversand aus
+    port: 587
+    security: starttls      # starttls | tls | none
+    user: ""
+    from: ""
+    replyTo: ""
+    timeoutS: 30
+  masterApi:
+    enabled: false
+    url: ""
+    scheduleMinutes: 0
+
+# Anwendungs-Secrets: je Schluessel ein secretKeyRef. existingSecret empfohlen;
+# secrets.create legt ein Secret aus secrets.values an (nur Dev/Test – mit helm template
+# bzw. GitOps landen die Werte sonst im Klartext im Manifest).
+secrets:
+  existingSecret: ""
+  keys:
+    csrfSecret: CSRF_SECRET           # Pflicht, >= 32 Zeichen
+    dbPassword: POSTGRES_PASSWORD
+    databaseUrl: DATABASE_URL
+    smtpPassword: SMTP_PASSWORD       # optional
+    masterApiToken: MASTER_API_TOKEN  # optional
+  create: false
+  values: {}
+
+database:
+  host: ""
+  port: 5432
+  name: npt
+  user: npt
+  # Secret mit dem DB-Zugang (Default: secrets.existingSecret bzw. das erzeugte Secret).
+  # urlKey gesetzt -> DATABASE_URL (Vorrang, z. B. CNPG-Secret "<cluster>-app", Schluessel
+  # "uri"); sonst passwordKey (Default secrets.keys.dbPassword) -> POSTGRES_PASSWORD.
+  existingSecret: ""
+  passwordKey: ""
+  urlKey: ""
+  tls:
+    sslmode: ""             # disable | allow | prefer | require | verify-ca | verify-full
+    secretName: ""          # Secret mit CA bzw. Client-Zertifikat, gemountet unter /etc/npt-db
+    rootCertKey: ""         # z. B. ca.crt
+    certKey: ""             # Client-Zertifikat (optional)
+    keyKey: ""              # Client-Schluessel (optional)
+  # Verbindungs-Budget (K5): (P_max + 1) * webWorkers * 18 + adminWorkers * 16
+  # + 6 + 2 + budgetReserve <= maxConnections; P_max = hpa.maxReplicas bzw. replicas,
+  # +1 = auslaufender Pod beim Rollout. Default: 4 * 2 * 18 + 32 + 8 + 10 = 194 <= 200.
+  maxConnections: 200
+  # Freie Verbindungen fuer psql, pg_dump, Monitoring (superuser_reserved_connections
+  # der Datenbank kommt hinzu).
+  budgetReserve: 10
+  budgetCheck: true
+
+migrations:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 256Mi }
+
+public:
+  replicas: 3
+  webWorkers: 2             # je Worker 300 SSE-Plaetze -> 3 x 2 = 1.800
+  # Quell-CIDRs der Ingress-/Gateway-Controller-Pods (TRUSTED_PROXY_IPS). Pflicht, wenn
+  # ingress oder httpRoute aktiv ist; sonst zaehlt das Rate-Limit nur die Proxy-IP.
+  trustedProxyCIDRs: []
+  resources:
+    requests: { cpu: 250m, memory: 320Mi }
+    limits: { memory: 640Mi }
+  terminationGracePeriodSeconds: 40
+  preStopSleepSeconds: 5
+  hpa:
+    enabled: false
+    minReplicas: null       # Default: public.replicas
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+    behavior:
+      scaleDown:
+        stabilizationWindowSeconds: 300
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # Leer = Verteilung ueber Knoten (ScheduleAnyway) per Default-Regel des Charts.
+  topologySpreadConstraints: []
+  podAnnotations: {}
+
+backend:
+  adminWorkers: 2
+  resources:
+    requests: { cpu: 200m, memory: 384Mi }
+    limits: { memory: 1Gi }
+  terminationGracePeriodSeconds: 40
+  gateway:
+    resources:
+      requests: { cpu: 20m, memory: 32Mi }
+      limits: { memory: 128Mi }
+    verifyDepth: 2
+    crlReloadIntervalS: 60
+    workerProcesses: 2
+  persistence:
+    enabled: true
+    existingClaim: ""
+    storageClass: ""
+    size: 5Gi
+    accessModes: [ReadWriteOnce]
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+admin:
+  service:
+    type: ClusterIP         # ClusterIP | LoadBalancer | NodePort (nur Test)
+    port: 443
+    nodePort: null
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    externalTrafficPolicy: Local
+    annotations: {}
+  # Serverzertifikat des Gateways (z. B. cert-manager Certificate -> Secret).
+  tls:
+    secretName: ""
+    certKey: tls.crt
+    keyKey: tls.key
+  # CA(s), die Admin-Client-Zertifikate ausstellen: genau eines von configMapName/secretName.
+  clientCa:
+    configMapName: ""
+    secretName: ""
+    key: ca.crt
+  crl:
+    enabled: false
+    secretName: ""
+    configMapName: ""
+    key: crl.pem
+  # Optional: Gateway-API TLSRoute (TLS-Passthrough, TLS endet nur im Gateway-Sidecar).
+  tlsRoute:
+    enabled: false
+    apiVersion: gateway.networking.k8s.io/v1alpha2
+    parentRefs: []
+    hostnames: []
+
+# Bearbeiter-Zugang: Ingress ODER HTTPRoute (Controller-Beispiele: docs/KUBERNETES.md).
+ingress:
+  enabled: false
+  className: ""
+  # Bei className "nginx" (ingress-nginx) setzt das Chart Default-Annotationen fuer SSE,
+  # Body-Grenze und abgeschaltetes Access-Log; eigene Annotationen haben Vorrang.
+  annotations: {}
+  hosts: []                 # [{host: npt.example.org, paths: [{path: /, pathType: Prefix}]}]
+  tls: []                   # [{secretName: npt-public-tls, hosts: [npt.example.org]}]
+  sseTimeoutSeconds: 3600
+httpRoute:
+  enabled: false
+  parentRefs: []            # [{name: eg, namespace: envoy-gateway-system}]
+  hostnames: []
+  sseTimeout: 3600s
+
+networkPolicy:
+  enabled: true
+  # Herkunft des Bearbeiter-Verkehrs (Ingress-/Gateway-Controller).
+  ingressController:
+    namespaceSelector: {}   # z. B. {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
+    podSelector: {}
+  # Wer den mTLS-Port 8443 des Gateways erreichen darf (bei externalTrafficPolicy Local
+  # die echten Client-IPs).
+  adminSourceCIDRs: [0.0.0.0/0]
+  # Zusaetzliche Quellen fuer 8443 (z. B. Gateway-API-Controller bei TLSRoute).
+  adminIngressFrom: []
+  dns:
+    namespaceSelector: {}   # leer = alle Namespaces
+    podSelector:
+      matchLabels: { k8s-app: kube-dns }
+    ports: [53]
+  # Datenbank: CIDRs und/oder Selektoren; alles leer = Port in jedes Ziel.
+  database:
+    cidrs: []
+    namespaceSelector: {}
+    podSelector: {}
+    port: 5432
+  # SMTP (nur backend): CIDRs leer = Port in jedes Ziel.
+  smtp:
+    cidrs: []
+    port: 587
+  # Stammdaten-API (nur backend, nur bei config.masterApi.enabled).
+  masterApi:
+    cidrs: []
+    port: 443
+  extraEgress: []
+
+# Pod-Sicherheit (PodSecurity "restricted").
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 10001
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile: { type: RuntimeDefault }
+securityContext:
+  app:
+    runAsUser: 10001
+    runAsGroup: 10001
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities: { drop: [ALL] }
+    seccompProfile: { type: RuntimeDefault }
+  gateway:
+    runAsUser: 101
+    runAsGroup: 101
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities: { drop: [ALL] }
+    seccompProfile: { type: RuntimeDefault }
+
+serviceAccount:
+  create: true
+  name: ""
+  automountServiceAccountToken: false
+
+# helm test: Pod mit dem App-Abbild prueft /healthz und die mTLS-Abweisung ohne Zertifikat.
+tests:
+  enabled: true

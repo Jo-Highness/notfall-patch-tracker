@@ -1,0 +1,79 @@
+# Optionales Overlay: HTTPS fuer den Bearbeiter-Bereich ohne externen Reverse Proxy
+# (DECISIONS J14). nginx "public-tls" terminiert TLS und leitet ueber das interne Netz
+# tls_net an den Bearbeiter-Port der App. Klartext auf einem TLS-Port wird per 301 auf
+# https:// umgeleitet; ein Zusatzport (PUBLIC_TLS_HTTP_PORT) leitet auf den Haupt-Port um.
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.tls.yml        (in .env)
+#   PUBLIC_TLS_DIR=<Verzeichnis mit fullchain.pem + server.key>  (nicht im Repo)
+#   PUBLIC_BASE_URL=https://<host>:<PUBLIC_TLS_PORT>
+#
+# Der eigene Host-Port der App (PUBLIC_BIND_ADDR/PUBLIC_PORT) bleibt bestehen; ihn auf
+# 127.0.0.1 belassen. Die App vertraut X-Forwarded-For nur von der festen Proxy-Adresse.
+services:
+  app:
+    environment:
+      TRUSTED_PROXY_IPS: ${PUBLIC_TLS_PROXY_IP:-172.31.250.19}
+    networks:
+      tls_net:
+        ipv4_address: ${APP_TLS_IP:-172.31.250.18}
+
+  public-tls:
+    # Offizielles nginx-Abbild (per Digest) ohne ungenutzte Module, sonst unveraendert
+    # (tls-proxy/Dockerfile); Konfiguration und Zertifikate kommen als Mounts.
+    build:
+      context: ./tls-proxy
+      args:
+        NPT_REVISION: ${NPT_REVISION:-}
+        NPT_SOURCE_URL: ${NPT_SOURCE_URL:-}
+    image: notfall-patch-tracker-tls-proxy:${NPT_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      NPT_PUBLIC_UPSTREAM: ${APP_TLS_IP:-172.31.250.18}:8000
+      PUBLIC_TLS_PORT: ${PUBLIC_TLS_PORT:-8444}
+      NGINX_ENTRYPOINT_QUIET_LOGS: "1"
+    ports:
+      - "${PUBLIC_TLS_BIND_ADDR:-0.0.0.0}:${PUBLIC_TLS_PORT:-8444}:8443"
+      - "${PUBLIC_TLS_HTTP_BIND_ADDR:-0.0.0.0}:${PUBLIC_TLS_HTTP_PORT:-8081}:8080"
+    volumes:
+      - ./tls-proxy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./tls-proxy/public.conf.template:/etc/nginx/templates/default.conf.template:ro
+      # Verzeichnis-Mount: ersetztes Zertifikat wird mit "nginx -s reload" aktiv.
+      - ${PUBLIC_TLS_DIR:-./pki-public}:/etc/npt-tls:ro
+    networks:
+      tls_edge_net: {}
+      tls_net:
+        ipv4_address: ${PUBLIC_TLS_PROXY_IP:-172.31.250.19}
+    read_only: true
+    tmpfs:
+      - /etc/nginx/conf.d:size=1m
+      - /var/cache/nginx:size=32m
+      - /run:size=1m
+      - /tmp:size=8m
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]
+    security_opt: ["no-new-privileges:true"]
+    ulimits:
+      nofile: { soft: 16384, hard: 16384 }
+    mem_limit: ${PUBLIC_TLS_MEM_LIMIT:-128m}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/tls-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+networks:
+  # Veroeffentlichte Ports des Proxys.
+  tls_edge_net: {}
+  # Nur Proxy <-> App-Bearbeiter-Port; feste Adressen fuer TRUSTED_PROXY_IPS.
+  tls_net:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${TLS_NET_SUBNET:-172.31.250.16/28}

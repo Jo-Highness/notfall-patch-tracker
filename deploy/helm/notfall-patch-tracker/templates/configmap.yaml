@@ -1,0 +1,48 @@
+{{- include "npt.validate" . -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "npt.fullname" . }}
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+data:
+  PUBLIC_BASE_URL: {{ .Values.publicBaseUrl | quote }}
+  ADMIN_BASE_URL: {{ .Values.adminBaseUrl | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  DISPLAY_TZ: {{ .Values.config.displayTz | quote }}
+  ADMIN_CERT_ID_ATTRIBUTE: {{ .Values.config.adminCertIdAttribute | quote }}
+  ADMIN_BOOTSTRAP_IDS: {{ if .Values.config.adminBootstrapIds }}{{ toJson .Values.config.adminBootstrapIds | quote }}{{ else }}""{{ end }}
+  UPLOAD_MAX_MB: {{ .Values.config.uploadMaxMb | quote }}
+  MAIL_RATE_PER_SEC: {{ .Values.config.mailRatePerSec | quote }}
+  RATE_LIMIT_WRITES: {{ .Values.config.rateLimit.writes | quote }}
+  RATE_LIMIT_WRITES_WINDOW_S: {{ .Values.config.rateLimit.writesWindowS | quote }}
+  RATE_LIMIT_CREATE: {{ .Values.config.rateLimit.create | quote }}
+  RATE_LIMIT_CREATE_WINDOW_S: {{ .Values.config.rateLimit.createWindowS | quote }}
+  SMTP_HOST: {{ .Values.config.smtp.host | quote }}
+  SMTP_PORT: {{ .Values.config.smtp.port | quote }}
+  SMTP_SECURITY: {{ .Values.config.smtp.security | quote }}
+  SMTP_USER: {{ .Values.config.smtp.user | quote }}
+  SMTP_FROM: {{ .Values.config.smtp.from | quote }}
+  SMTP_REPLY_TO: {{ .Values.config.smtp.replyTo | quote }}
+  SMTP_TIMEOUT_S: {{ .Values.config.smtp.timeoutS | quote }}
+  MASTER_API_ENABLED: {{ .Values.config.masterApi.enabled | quote }}
+  MASTER_API_URL: {{ .Values.config.masterApi.url | quote }}
+  MASTER_API_SCHEDULE_MINUTES: {{ .Values.config.masterApi.scheduleMinutes | quote }}
+  {{- if not .Values.database.urlKey }}
+  POSTGRES_HOST: {{ .Values.database.host | quote }}
+  POSTGRES_PORT: {{ .Values.database.port | quote }}
+  POSTGRES_DB: {{ .Values.database.name | quote }}
+  POSTGRES_USER: {{ .Values.database.user | quote }}
+  {{- end }}
+  POSTGRES_SSLMODE: {{ .Values.database.tls.sslmode | quote }}
+  POSTGRES_SSLROOTCERT: {{ if .Values.database.tls.rootCertKey }}{{ printf "/etc/npt-db/%s" .Values.database.tls.rootCertKey | quote }}{{ else }}""{{ end }}
+  POSTGRES_SSLCERT: {{ if .Values.database.tls.certKey }}{{ printf "/etc/npt-db/%s" .Values.database.tls.certKey | quote }}{{ else }}""{{ end }}
+  POSTGRES_SSLKEY: {{ if .Values.database.tls.keyKey }}{{ printf "/etc/npt-db/%s" .Values.database.tls.keyKey | quote }}{{ else }}""{{ end }}
+  BACKUP_DIR: /data/backups
+  PUBLIC_LISTEN_PORT: "8000"
+  ADMIN_LISTEN_PORT: "8001"
+  # Admin-Port nur auf loopback; nur der Gateway-Sidecar im selben Pod erreicht ihn (K3).
+  ADMIN_BIND_ADDR: 127.0.0.1
+  ADMIN_GATEWAY_CIDR: 127.0.0.1/32
+  # helm rollback: aeltere Pods starten auch gegen eine neuere Datenbank-Revision (K2).
+  NPT_SCHEMA_NEWER: warn

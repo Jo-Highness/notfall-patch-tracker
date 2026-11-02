@@ -1,0 +1,29 @@
+{% extends "admin/layout.html" %}
+{% block title %}Backup wiederherstellen – {{ p.name }}{% endblock %}
+{% block content %}
+<p><a href="/admin/projekte/{{ p.id }}">← {{ p.name }}</a></p>
+<h1>Backup wiederherstellen</h1>
+<section class="card" data-testid="restore-dialog">
+  <dl class="facts">
+    <dt>Backup</dt><dd>{{ b.created_at | dt }} – {{ labels.BACKUP_TRIGGER.get(b.trigger, b.trigger) }} (Stand {{ b.change_seq }}{% if b.created_by %}, von <code>{{ b.created_by }}</code>{% endif %})</dd>
+    <dt>Projekt jetzt</dt><dd>{{ s.total }} Systeme, Stand {{ p.change_seq }}</dd>
+  </dl>
+  <div class="notice">
+    <strong>Alle Systeme des Projekts werden auf den Stand des Backups zurückgesetzt</strong> – auch die von Bearbeitern seither eingetragenen Werte.
+    Nach dem Backup angelegte Systeme werden entfernt, seither entfernte wieder angelegt.
+    Vorher wird automatisch ein Backup „vor Wiederherstellung“ des aktuellen Stands erstellt; jede Änderung steht im Änderungsprotokoll.
+    Alle geöffneten Listen laden danach neu.
+  </div>
+  {% if p.status != "aktiv" %}
+  <p class="msg msg-err" role="alert">Das Projekt ist {{ labels.PROJECT_STATUS[p.status] }}. Wiederherstellen ist nur in aktiven Projekten möglich.</p>
+  {% else %}
+  <form method="post" action="/admin/projekte/{{ p.id }}/backups/{{ b.id }}/wiederherstellen" class="form"
+        data-confirm="Projekt jetzt auf den Stand vom {{ b.created_at | dt }} zurücksetzen?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="check"><input type="checkbox" name="confirm" value="ja" required data-testid="restore-confirm"> Ich habe verstanden, dass der aktuelle Stand überschrieben wird.</label>
+    <p><button type="submit" class="btn btn-danger" data-testid="restore-submit">Wiederherstellen</button>
+      <a href="/admin/projekte/{{ p.id }}">Abbrechen</a></p>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "admin/layout.html" %}
+{% block title %}Audit-Log – Notfall-Patch-Tracker{% endblock %}
+{% block content %}
+<h1>Audit-Log</h1>
+<p class="hint">Die letzten 200 Admin-Aktionen (Zeit in Europe/Berlin).</p>
+<table class="tbl">
+  <thead><tr><th>Zeitpunkt</th><th>Wer</th><th>Aktion</th><th>Ziel</th><th>IP</th></tr></thead>
+  <tbody>
+  {% for e in entries %}
+    <tr>
+      <td>{{ e.ts | dt }}</td>
+      <td><code>{{ e.actor_identifier }}</code></td>
+      <td>{{ e.action }}</td>
+      <td>{% if e.target %}<code>{{ e.target }}</code>{% endif %}</td>
+      <td>{{ e.client_ip or "" }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5">Noch keine Einträge.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,131 @@
+{% extends "admin/layout.html" %}
+{% block title %}Vorschau Upload – {{ p.name }}{% endblock %}
+{% block content %}
+{% set st = pv.staged %}{% set d = pv.diff %}{% set rep = st.report %}
+<p><a href="/admin/projekte/{{ p.id }}">← {{ p.name }}</a></p>
+<h1>Vorschau Daten-Upload</h1>
+{% if stale %}
+<p class="msg msg-err" role="alert" data-testid="upload-stale">Seit der Vorschau wurden betroffene Felder im Projekt geändert. Es wurde nichts geschrieben.
+  Die Vorschau unten ist aktualisiert – bitte prüfen und erneut bestätigen. Auswahlen, deren alter und neuer Wert gleich geblieben sind, wurden übernommen.</p>
+{% endif %}
+<p class="hint">Datei: <strong>{{ st.file_name or "–" }}</strong>, hochgeladen {{ st.created_at | dt }} von <code>{{ st.created_by }}</code>,
+  {{ st.records | length }} Datensätze. Gelieferte Spalten: {% for c in d.columns %}{{ fields.DISPLAY_NAMES[c] }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+<p class="notice" title="Leere Zellen löschen keine vorhandenen Werte.">Leere Zellen im Upload löschen keine vorhandenen Werte – sie sind hier nicht aufgeführt.</p>
+
+<section class="card summary" data-testid="upload-summary">
+  <span class="kpi"><strong data-testid="count-conflicts">{{ d.conflict_count }}</strong> Konflikte ({{ d.conflict_systems | length }} Systeme)</span>
+  <span class="kpi"><strong data-testid="count-fills">{{ d.fill_count }}</strong> Neubefüllungen ({{ d.fill_systems | length }} Systeme)</span>
+  <span class="kpi"><strong data-testid="count-unknown">{{ d.unknown | length }}</strong> unbekannte System-IDs</span>
+  <span class="kpi"><strong data-testid="count-unchanged">{{ d.unchanged }}</strong> unverändert</span>
+  <span class="kpi"><strong data-testid="count-errors">{{ rep.error_count }}</strong> Fehler</span>
+  <span class="kpi"><strong data-testid="count-warnings">{{ rep.warning_count }}</strong> Warnungen</span>
+</section>
+
+{% if rep.error_count %}
+<section class="card">
+  <h2>Fehler (Übernahme nicht möglich)</h2>
+  <p class="hint">Bitte die Datei korrigieren und erneut hochladen.</p>
+  <table class="tbl" data-testid="report-errors">
+    <thead><tr><th>Zeile</th><th>System-ID</th><th>Meldung</th></tr></thead>
+    <tbody>{% for i in rep.errors %}<tr><td>{{ i.row or "" }}</td><td>{{ i.system_id or "" }}</td><td>{{ i.message }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% if rep.error_count > rep.errors | length %}<p class="hint">… und {{ rep.error_count - rep.errors | length }} weitere.</p>{% endif %}
+</section>
+{% endif %}
+
+{% if rep.warning_count %}
+<section class="card">
+  <details>
+    <summary><strong>Warnungen ({{ rep.warning_count }})</strong></summary>
+    <table class="tbl" data-testid="report-warnings">
+      <thead><tr><th>Zeile</th><th>System-ID</th><th>Meldung</th></tr></thead>
+      <tbody>{% for i in rep.warnings %}<tr><td>{{ i.row or "" }}</td><td>{{ i.system_id or "" }}</td><td>{{ i.message }}</td></tr>{% endfor %}</tbody>
+    </table>
+  </details>
+</section>
+{% endif %}
+
+<form method="post" action="/admin/projekte/{{ p.id }}/upload/{{ st.id }}/uebernehmen" data-testid="upload-apply-form"
+      data-confirm="Upload jetzt übernehmen? Vorher wird automatisch ein Backup erstellt.">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="fingerprint" value="{{ pv.fingerprint }}">
+
+  <section class="card">
+    <h2>Konflikte ({{ d.conflict_count }})</h2>
+    <p class="hint">Das Feld im Projekt ist gefüllt und weicht vom Upload ab. Übernommen werden nur ausgewählte Felder –
+      einzeln, je Zeile („ganze Zeile“) oder alle. Nicht ausgewählte Konflikte behalten den Projektwert.</p>
+    {% if d.conflict_systems %}
+    <label class="check"><input type="checkbox" data-check-all="c" data-testid="conflicts-all"> alle Konflikte auswählen</label>
+    <table class="tbl" data-testid="list-conflicts">
+      <thead><tr><th>System-ID</th><th>System-Name</th><th>Übernehmen</th><th>Feld</th><th>bisher (Projekt)</th><th>neu (Upload)</th></tr></thead>
+      <tbody>
+      {% for s in d.conflict_systems %}{% set g = "g" ~ loop.index %}
+        {% for key, c in s.keyed_conflicts() %}
+        <tr data-testid="conflict-{{ s.system_id }}-{{ c.field }}">
+          {% if loop.first %}
+          <td rowspan="{{ s.conflicts | length }}">{{ s.system_id }}{% if s.row %}<br><span class="hint">Zeile {{ s.row }}</span>{% endif %}</td>
+          <td rowspan="{{ s.conflicts | length }}">{{ s.system_name or "" }}
+            {% if s.conflicts | length > 1 %}<br><label class="check"><input type="checkbox" data-check-group="{{ g }}" data-testid="conflict-row-{{ s.system_id }}"> ganze Zeile</label>{% endif %}</td>
+          {% endif %}
+          <td><input type="checkbox" name="c" value="{{ key }}" data-group="{{ g }}" data-testid="conflict-take-{{ s.system_id }}-{{ c.field }}"{% if key in selected %} checked{% endif %}></td>
+          <td>{{ fields.DISPLAY_NAMES[c.field] }}</td>
+          <td class="old">{{ show(c.field, c.old) }}</td>
+          <td class="new">{{ show(c.field, c.new) }}</td>
+        </tr>
+        {% endfor %}
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="hint">Keine Konflikte.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <details{% if d.fill_count <= 100 %} open{% endif %}>
+      <summary><strong>Neubefüllungen ({{ d.fill_count }})</strong> – Feld im Projekt leer, wird übernommen</summary>
+      {% if d.fill_systems %}
+      <table class="tbl" data-testid="list-fills">
+        <thead><tr><th>System-ID</th><th>System-Name</th><th>Feld</th><th>neu</th></tr></thead>
+        <tbody>
+        {% for s in d.fill_systems %}{% for c in s.fills %}
+          <tr><td>{{ s.system_id }}</td><td>{{ s.system_name or "" }}</td><td>{{ fields.DISPLAY_NAMES[c.field] }}</td><td class="new">{{ show(c.field, c.new) }}</td></tr>
+        {% endfor %}{% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </details>
+  </section>
+
+  <section class="card">
+    <details{% if d.unknown | length <= 100 %} open{% endif %}>
+      <summary><strong>Unbekannte System-IDs ({{ d.unknown | length }})</strong> – im Projekt nicht vorhanden</summary>
+      <p class="hint">Standard: ignorieren. Ausgewählte IDs werden als neue Systeme angelegt (Herkunft „{{ labels.ORIGIN["admin_upload"] }}“).
+        IDs mit dem reservierten Präfix „NEW-“ können nicht angelegt werden.</p>
+      {% if d.unknown %}
+      <label class="check"><input type="checkbox" data-check-all="anlegen" data-testid="create-all"> alle anlegen</label>
+      <table class="tbl" data-testid="list-unknown">
+        <thead><tr><th>Anlegen</th><th>System-ID</th><th>Zeile</th><th>System-Name</th><th>Digital Access Zone</th><th>Anwendungsverantwortlicher</th></tr></thead>
+        <tbody>{% for u in d.unknown %}<tr>
+          <td>{% if u.creatable %}<input type="checkbox" name="anlegen" value="{{ u.system_id }}" data-testid="create-{{ u.system_id }}"{% if u.system_id in create_selected %} checked{% endif %}>{% else %}<span class="hint">nicht möglich</span>{% endif %}</td>
+          <td>{{ u.system_id }}</td><td>{{ u.row or "" }}</td><td>{{ u.values.get("system_name") or "" }}</td>
+          <td>{{ u.values.get("digital_access_zone") or "" }}</td><td>{{ u.values.get("app_owner") or "" }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% endif %}
+    </details>
+  </section>
+
+  <section class="card">
+    <p><strong data-testid="unchanged-count">{{ d.unchanged }}</strong> Systeme im Upload sind unverändert.</p>
+    <p>
+      <button type="submit" class="btn btn-primary" data-testid="upload-apply" {% if not pv.can_apply %}disabled{% endif %}>Übernehmen (ausgewählte Konflikte)</button>
+      {% if d.conflict_count %}<button type="submit" name="alle" value="1" class="btn btn-danger" data-testid="upload-apply-all" {% if not pv.can_apply %}disabled{% endif %}>Übernehmen und alle {{ d.conflict_count }} Konflikte überschreiben</button>{% endif %}
+      {% if not pv.can_apply %}<span class="hint">Übernahme gesperrt: die Datei enthält Fehler.</span>{% endif %}
+    </p>
+  </section>
+</form>
+<form method="post" action="/admin/projekte/{{ p.id }}/upload/{{ st.id }}/verwerfen">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit" class="btn" data-testid="upload-discard">Verwerfen</button>
+</form>
+{% endblock %}

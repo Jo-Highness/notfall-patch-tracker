@@ -1,0 +1,26 @@
+{% extends "admin/layout.html" %}
+{% block title %}Mailversand – {{ p.name }}{% endblock %}
+{% block content %}
+<p><a href="/admin/projekte/{{ p.id }}">← {{ p.name }}</a></p>
+<h1>Mailversand an Anwendungsverantwortliche</h1>
+<p class="hint">Je Anwendungsverantwortlichem (normalisierte Adresse) genau eine Mail; der Platzhalter <code>[LINK]</code> wird je Empfänger
+  durch Links auf seine Systeme in der Hauptliste ersetzt. Versand im Hintergrund, gedrosselt, mit Status je Empfänger.</p>
+{% if smtp_error %}<p class="msg msg-err" role="alert" data-testid="mail-smtp-error">Versand nicht möglich: SMTP ist nicht (vollständig) konfiguriert. Kampagnen lassen sich trotzdem anlegen und prüfen.</p>{% endif %}
+<p><a class="btn btn-primary" href="/admin/projekte/{{ p.id }}/mail/neu" data-testid="mail-new">Neue Kampagne</a></p>
+{% if items %}
+<table class="tbl" data-testid="mail-campaigns">
+  <thead><tr><th>#</th><th>Betreff</th><th>Zielgruppe</th><th>Geändert</th><th>Läufe</th><th>Letzter Lauf</th></tr></thead>
+  <tbody>
+  {% for it in items %}{% set c = it.campaign %}
+    <tr data-testid="mail-campaign-{{ c.id }}"><td>{{ c.id }}</td>
+      <td><a href="/admin/projekte/{{ p.id }}/mail/{{ c.id }}">{{ c.subject }}</a></td>
+      <td>{{ selectors[c.selector].name if c.selector in selectors else c.selector }}</td>
+      <td>{{ c.updated_at | dt }}</td><td>{{ c.send_run }}</td>
+      <td>{% if c.send_run %}{% for k, v in it.counts.items() %}{{ labels.MAIL_DELIVERY_STATUS.get(k, k) }}: {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}{% else %}<span class="hint">noch nicht versendet</span>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="hint">Noch keine Kampagnen.</p>
+{% endif %}
+{% endblock %}

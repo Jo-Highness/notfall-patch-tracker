@@ -1,0 +1,68 @@
+# Werte fuer den lokalen Test auf kind (docs/KUBERNETES.md, „Test auf kind“). Nur Test:
+# NodePort fuer den Admin-Zugang, Abbilder per `kind load docker-image` (Tag k8s),
+# Datenbank aus tests/k8s/postgres.yaml, Secrets/PKI legt tests/k8s/kind-test.sh an.
+image:
+  app:
+    repository: notfall-patch-tracker
+    tag: k8s
+    pullPolicy: Never
+  gateway:
+    repository: notfall-patch-tracker-gateway
+    tag: k8s
+    pullPolicy: Never
+
+publicBaseUrl: https://npt.example.org
+adminBaseUrl: https://npt-admin.example.org:30443
+
+config:
+  adminBootstrapIds: []      # setzt das Testskript (Admin-Identifier der Test-PKI)
+
+secrets:
+  existingSecret: npt-app    # CSRF_SECRET, POSTGRES_PASSWORD
+
+database:
+  host: npt-db
+  name: npt
+  user: npt
+
+public:
+  replicas: 3
+  webWorkers: 2
+  # Pod-CIDR von kind: der Edge-Proxy (Traefik) laeuft als Pod.
+  trustedProxyCIDRs: [10.244.0.0/16]
+  resources:
+    requests: { cpu: 50m, memory: 256Mi }
+
+backend:
+  resources:
+    requests: { cpu: 50m, memory: 256Mi }
+  gateway:
+    crlReloadIntervalS: 10
+  persistence:
+    size: 1Gi
+
+admin:
+  service:
+    type: NodePort
+    nodePort: 30443
+  tls:
+    secretName: npt-gw-tls
+  clientCa:
+    configMapName: npt-client-ca
+  crl:
+    enabled: true
+    secretName: npt-gw-crl
+
+ingress:
+  enabled: true
+  className: traefik
+  hosts:
+    - host: npt.example.org
+
+networkPolicy:
+  ingressController:
+    namespaceSelector:
+      matchLabels: { kubernetes.io/metadata.name: npt-edge }
+  database:
+    podSelector:
+      matchLabels: { app.kubernetes.io/name: npt-test-db }

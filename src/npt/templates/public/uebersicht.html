@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Übersicht – {{ project.name }}{% endblock %}
+{% block head %}
+  <script src="{{ static_prefix }}/js/npt-live.js" defer></script>
+  <script src="{{ static_prefix }}/js/uebersicht.js" defer></script>
+{% endblock %}
+{% block nav %}{% include "public/project_nav.html" %}{% endblock %}
+{% block content %}
+<script type="application/json" id="npt-pivot-config">{{ config | tojson }}</script>
+{% if project.read_only %}
+<p class="msg msg-err" role="status" data-testid="readonly-banner">Dieses Projekt ist schreibgeschützt.</p>
+{% endif %}
+<p class="msg msg-err" id="live-banner" role="alert" data-testid="live-banner" hidden></p>
+<h1>Übersicht</h1>
+{% set k = pivot.kpi %}
+<div class="kpis" id="kpis">
+  <a class="kpi-card" id="kpi-processed" href="{{ k.processed_href }}" data-testid="kpi-processed">
+    <span class="kpi-value" id="kpi-processed-pct">{{ ("%.1f" % k.processed_pct) | replace(".", ",") }} %</span>
+    <span class="kpi-label">bearbeitet („System betroffen“ nicht leer): <span id="kpi-processed-count">{{ k.processed }}</span> von <span id="kpi-total">{{ k.total }}</span></span>
+  </a>
+  <a class="kpi-card" id="kpi-yes" href="{{ k.yes_without_action_href }}" data-testid="kpi-yes-without-action">
+    <span class="kpi-value" id="kpi-yes-count">{{ k.yes_without_action }}</span>
+    <span class="kpi-label">„Ja“ ohne ausgeführte Aktion</span>
+  </a>
+</div>
+<div class="pivot-wrap">
+<table class="tbl pivot" id="pivot" data-testid="pivot">
+  <thead>
+    <tr>
+      <th scope="col">Digital Access Zone</th>
+      {% for c in pivot.columns %}<th scope="col" class="num">{{ column_label(c.key) }}</th>{% endfor %}
+      <th scope="col" class="num">Summe</th>
+    </tr>
+  </thead>
+  <tbody id="pivot-body">
+    {% for r in pivot.rows %}{% set ri = loop.index0 %}
+    <tr data-daz="{{ r.daz or '' }}" data-testid="pivot-row-{{ ri }}">
+      <th scope="row"><a href="{{ r.href }}" data-testid="rowlabel-{{ ri }}">{{ r.label }}</a></th>
+      {% for c in r.cells %}<td class="num{% if not c.count %} zero{% endif %}"><a href="{{ c.href }}" data-testid="cell-{{ ri }}-{{ c.key or 'leer' }}">{{ c.count }}</a></td>{% endfor %}
+      <td class="num sum"><a href="{{ r.href }}" data-testid="rowsum-{{ ri }}">{{ r.total }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot id="pivot-foot">
+    <tr>
+      <th scope="row">Summe</th>
+      {% for c in pivot.columns %}<td class="num sum"><a href="{{ c.href }}" data-testid="colsum-{{ c.key or 'leer' }}">{{ c.count }}</a></td>{% endfor %}
+      <td class="num sum total"><a href="{{ pivot.total_href }}" data-testid="total">{{ pivot.total }}</a></td>
+    </tr>
+  </tfoot>
+</table>
+</div>
+<p class="hint">Jede Zahl ist ein Link auf die passend gefilterte Liste. Die Übersicht aktualisiert sich automatisch. <span id="pivot-stand" data-testid="pivot-stand"></span></p>
+{% endblock %}

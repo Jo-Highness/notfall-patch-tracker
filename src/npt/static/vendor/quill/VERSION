@@ -1,0 +1,7 @@
+quill 2.0.3 (BSD-3-Clause, siehe LICENSE; gebuendelt: parchment 3 (BSD-3-Clause),
+quill-delta 5 / eventemitter3 5 / lodash-es 4 (MIT))
+Quelle: npm registry, quill-2.0.3.tgz
+  sha512 (Registry-Integrity, geprueft): xEYQBqfYx/sfb33VJiKnSJp8ehloavImQ2A6564GAbqG55PGw1dAWUn1MUbQB62t0azawUS2CZZhWCjO8gRvTw==
+Uebernommen: dist/quill.js -> quill.min.js, dist/quill.snow.css (jeweils ohne sourceMappingURL-Kommentar)
+  sha256 quill.min.js:   22afdde505c286165d1d4d4f9f02b505773458d0f770e9e24ee1897184c11c9e
+  sha256 quill.snow.css: 99302d78bcda5f34450fbeb84c0848a0bb70b62dca555af0f6e0ead4a8f624d2

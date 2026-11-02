@@ -1,0 +1,27 @@
+{{- $r := .Values.httpRoute -}}
+{{- if $r.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "npt.fullname" . }}-public
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public
+spec:
+  parentRefs:
+    {{- toYaml $r.parentRefs | nindent 4 }}
+  {{- with $r.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - matches:
+        - path: { type: PathPrefix, value: / }
+      # SSE-Streams laufen bis zu sseTimeout; Default mancher Implementierungen (z. B.
+      # Envoy Gateway 15 s) wuerde sie kappen (K4).
+      timeouts:
+        request: {{ $r.sseTimeout }}
+      backendRefs:
+        - name: {{ include "npt.fullname" . }}-public
+          port: 8000
+{{- end }}

@@ -1,0 +1,115 @@
+{{- $p := .Values.public -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "npt.fullname" . }}-public
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public
+spec:
+  {{- if not $p.hpa.enabled }}
+  replicas: {{ $p.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  # Kein Surge, ein Pod nach dem anderen: das DB-Verbindungsbudget rechnet mit P_max plus
+  # einem auslaufenden Pod (K5). minReadySeconds > terminationGracePeriodSeconds, damit der
+  # naechste alte Pod erst endet, wenn der vorige seine Verbindungen sicher abgegeben hat.
+  minReadySeconds: {{ include "npt.publicMinReadySeconds" . }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: {{ include "npt.publicMaxSurge" . }}
+      maxUnavailable: {{ include "npt.publicMaxUnavailable" . }}
+  selector:
+    matchLabels:
+      {{- include "npt.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public
+  template:
+    metadata:
+      labels:
+        {{- include "npt.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: public
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with $p.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "npt.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ $p.terminationGracePeriodSeconds }}
+      initContainers:
+        {{- include "npt.migrateInitContainer" . | nindent 8 }}
+      containers:
+        - name: app
+          image: {{ include "npt.image" (dict "root" . "kind" "app") }}
+          imagePullPolicy: {{ .Values.image.app.pullPolicy }}
+          envFrom:
+            {{- include "npt.appEnvFrom" . | nindent 12 }}
+          env:
+            - name: APP_ROLE
+              value: public
+            - name: WEB_WORKERS
+              value: {{ $p.webWorkers | quote }}
+            - name: NPT_SKIP_MIGRATE
+              value: "1"
+            - name: TRUSTED_PROXY_IPS
+              value: {{ join "," $p.trustedProxyCIDRs | quote }}
+            {{- include "npt.appEnv" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          startupProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 2
+            failureThreshold: 60
+            timeoutSeconds: 2
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+            failureThreshold: 3
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+          lifecycle:
+            preStop:
+              exec:
+                # Endpunkt-Entfernung abwarten, bevor die Worker SIGTERM bekommen.
+                command: ["sleep", "{{ $p.preStopSleepSeconds }}"]
+          securityContext:
+            {{- toYaml .Values.securityContext.app | nindent 12 }}
+          resources:
+            {{- toYaml $p.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- include "npt.dbTlsMount" . | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }
+        {{- include "npt.dbTlsVolume" . | nindent 8 }}
+      topologySpreadConstraints:
+        {{- include "npt.publicSpread" . | nindent 8 }}
+      {{- with $p.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $p.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $p.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

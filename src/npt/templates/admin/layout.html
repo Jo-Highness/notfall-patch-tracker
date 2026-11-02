@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Admin – Notfall-Patch-Tracker{% endblock %}
+{% block nav %}
+<nav class="nav">
+  <a href="/admin/" data-testid="nav-projekte">Projekte</a>
+  <a href="/admin/stammdaten" data-testid="nav-stammdaten">Stammdaten</a>
+  <a href="/admin/benutzer">Admin-Benutzer</a>
+  <a href="/admin/audit">Audit-Log</a>
+  <a href="/admin/hilfe" class="help-link" data-testid="nav-hilfe">Hilfe</a>
+</nav>
+<span class="whoami" title="{{ principal.subject_dn }}">{{ admin.display_name or principal.primary }}</span>
+{% endblock %}

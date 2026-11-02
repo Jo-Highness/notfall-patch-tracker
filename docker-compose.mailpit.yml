@@ -1,0 +1,50 @@
+# Dev-/Test-Overlay: lokaler Test-SMTP „Mailpit“ statt eines echten Mailservers.
+# NIE in Produktion verwenden – alle Mails bleiben in Mailpit (nichts wird zugestellt).
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.mailpit.yml   (in .env) bzw.
+#   docker compose -f docker-compose.yml -f docker-compose.mailpit.yml up -d
+#
+# Mailpit veroeffentlicht keinen Host-Port. Web-UI/API (:8025) nur im Netz public_net,
+# z. B. per Container-IP vom Docker-Host aus:
+#   docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' <projekt>-mailpit-1
+#   curl http://<ip>:8025/api/v1/messages
+services:
+  mailpit:
+    image: axllent/mailpit:v1.32.0@sha256:0790692be935ea4420d085694f7985b1f692ca6a8771ab0e0bd8ba75ac180498
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: "10000"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+      TZ: UTC
+    networks:
+      - public_net
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m   # Mailpit-Datenbank (temporaer, geht beim Neustart verloren)
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    environment:
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_SECURITY: none
+      SMTP_USER: ""
+      SMTP_PASSWORD: ""
+      SMTP_FROM: ${SMTP_FROM:-Notfall-Patch-Tracker (Dev) <npt-dev@npt.test>}
+      SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
+    depends_on:
+      mailpit:
+        condition: service_started

@@ -1,0 +1,49 @@
+{% extends "admin/layout.html" %}
+{% block content %}
+<h1>Admin-Bereich</h1>
+<p>Angemeldet per Client-Zertifikat als <code>{{ principal.primary }}</code> ({{ id_kind_label }}).</p>
+<section class="card">
+  <h2>Projekte</h2>
+  {% if projects %}
+  <table class="tbl" data-testid="project-list">
+    <thead><tr><th>Name</th><th>Status</th><th>Erstellt</th><th>Systeme</th><th>Fortschritt</th></tr></thead>
+    <tbody>
+    {% for s in projects %}
+      <tr data-testid="project-row-{{ s.project.id }}">
+        <td><a href="/admin/projekte/{{ s.project.id }}">{{ s.project.name }}</a>{% if s.project.description %}<br><small class="hint">{{ s.project.description | truncate(120) }}</small>{% endif %}</td>
+        <td class="status-{{ s.project.status }}">{{ labels.PROJECT_STATUS[s.project.status] }}</td>
+        <td>{{ s.project.created_at | dt }}</td>
+        <td>{{ s.total }}{% if s.manual %} <small class="hint">(davon {{ s.manual }} manuell)</small>{% endif %}</td>
+        <td><progress class="progress" max="100" value="{{ s.progress_pct }}"></progress> {{ s.progress_pct }} % <small class="hint">({{ s.processed }} bearbeitet)</small></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="hint">Noch keine Projekte.</p>
+  {% endif %}
+</section>
+<section class="card">
+  <h2>Neues Projekt</h2>
+  <form method="post" action="/admin/projekte" class="form" data-testid="project-create-form"
+        data-confirm="Projekt anlegen? Dabei wird eine Kopie des aktuellen Stammdatenbestands erzeugt.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Name
+      <input type="text" name="name" required maxlength="200" autocomplete="off" data-testid="project-name">
+    </label>
+    <label>Beschreibung (z. B. CVE-Nummer)
+      <textarea name="description" maxlength="2000" rows="2" data-testid="project-description"></textarea>
+    </label>
+    <button type="submit" class="btn btn-primary" data-testid="project-create">Projekt anlegen</button>
+  </form>
+  <p class="hint">Das Projekt erhält eine Kopie der aktuellen <a href="/admin/stammdaten">Stammdaten</a>; spätere Änderungen an den Stammdaten wirken sich nicht auf bestehende Projekte aus.</p>
+</section>
+<section class="card">
+  <h2>Verwaltung</h2>
+  <ul>
+    <li><a href="/admin/stammdaten">Stammdatenpflege (Excel-Import, Vorlage, Import-Historie)</a></li>
+    <li><a href="/admin/benutzer">Admin-Benutzer und offene Freischaltungsanfragen</a></li>
+    <li><a href="/admin/audit">Audit-Log der Admin-Aktionen</a></li>
+  </ul>
+</section>
+{% endblock %}

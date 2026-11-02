@@ -1,0 +1,44 @@
+{{- $i := .Values.ingress -}}
+{{- if $i.enabled }}
+{{- $defaults := dict -}}
+{{- if eq $i.className "nginx" -}}
+{{- /* ingress-nginx: SSE ohne Timeout-Abbruch, Body <= 1 MiB, kein Access-Log (Token im Pfad, K4). */}}
+{{- $t := toString (int $i.sseTimeoutSeconds) -}}
+{{- $defaults = dict "nginx.ingress.kubernetes.io/proxy-read-timeout" $t "nginx.ingress.kubernetes.io/proxy-send-timeout" $t "nginx.ingress.kubernetes.io/proxy-body-size" "1m" "nginx.ingress.kubernetes.io/enable-access-log" "false" -}}
+{{- end -}}
+{{- $annotations := merge (deepCopy (default (dict) $i.annotations)) $defaults -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "npt.fullname" . }}-public
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public
+  {{- with $annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $i.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with $i.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range $i.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range (default (list (dict "path" "/" "pathType" "Prefix")) .paths) }}
+          - path: {{ .path }}
+            pathType: {{ default "Prefix" .pathType }}
+            backend:
+              service:
+                name: {{ include "npt.fullname" $ }}-public
+                port:
+                  name: http
+          {{- end }}
+    {{- end }}
+{{- end }}

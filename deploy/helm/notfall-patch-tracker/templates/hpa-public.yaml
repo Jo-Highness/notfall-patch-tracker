@@ -1,0 +1,29 @@
+{{- $h := .Values.public.hpa -}}
+{{- if $h.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "npt.fullname" . }}-public
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "npt.fullname" . }}-public
+  minReplicas: {{ default .Values.public.replicas $h.minReplicas }}
+  # maxReplicas geht in das DB-Verbindungsbudget ein (K5).
+  maxReplicas: {{ $h.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $h.targetCPUUtilizationPercentage }}
+  {{- with $h.behavior }}
+  behavior:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

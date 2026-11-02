@@ -1,0 +1,40 @@
+# Konfiguration mit Geheimnissen
+.env
+.env.*
+!.env.example
+
+# Zertifikate, Schluessel, PKI-Ausgaben
+pki/
+pki-out/
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+*.csr
+*.srl
+
+# Backups und Testdaten-Ausgaben
+backups-data/
+backups/
+test-results/
+testdata-out/
+*.xlsx
+!src/npt/static/**/*.xlsx
+
+# Python / Werkzeuge
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# HTTPS-Overlay (docker-compose.tls.yml): Zertifikat + Schluessel
+pki-public/
+
+# SBOM-Ausgaben (scripts/sbom.sh) – Release-Artefakte, nicht im Repo (J15)
+sbom/

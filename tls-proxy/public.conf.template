@@ -1,0 +1,61 @@
+# public-tls: Server-Bloecke (envsubst: NPT_PUBLIC_UPSTREAM, PUBLIC_TLS_PORT).
+upstream npt_public {
+    server ${NPT_PUBLIC_UPSTREAM};
+    keepalive 32;
+}
+
+# Beide Ports sprechen TLS. Klartext-Anfragen an einen TLS-Port beantwortet nginx mit dem
+# internen Code 497 -> 301 auf https://<host>:PUBLIC_TLS_PORT (http:// und https:// auf
+# demselben Port funktionieren, alte http-Links ebenso).
+ssl_certificate     /etc/npt-tls/fullchain.pem;
+ssl_certificate_key /etc/npt-tls/server.key;
+ssl_protocols TLSv1.2 TLSv1.3;
+ssl_session_cache shared:npt_tls:10m;
+ssl_session_timeout 1h;
+
+# Health nur im Container (Klartext, loopback).
+server {
+    listen 127.0.0.1:8081;
+    location = /tls-health { access_log off; return 200 "ok\n"; }
+}
+
+# Zusatzport: leitet (Klartext wie TLS) auf den Haupt-Port um.
+server {
+    listen 8080 ssl;
+    error_page 497 =301 https://$host:${PUBLIC_TLS_PORT}$request_uri;
+    location / { return 301 https://$host:${PUBLIC_TLS_PORT}$request_uri; }
+}
+
+server {
+    listen 8443 ssl;
+    http2 on;
+    error_page 497 =301 https://$host:${PUBLIC_TLS_PORT}$request_uri;
+    # Bearbeiter-API nimmt hoechstens 64 KB JSON an.
+    client_max_body_size 1m;
+    # Kein HSTS: gilt fuer den ganzen Hostnamen (alle Ports) und wuerde andere
+    # Klartext-Dienste auf demselben Host brechen (DECISIONS J14).
+
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $http_host;
+    # Ueberschreiben statt anhaengen: die App vertraut nur diesem Proxy (TRUSTED_PROXY_IPS).
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto https;
+
+    # Live-Updates (SSE)
+    location ~ ^/p/[^/]+/api/events$ {
+        proxy_pass http://npt_public;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+    }
+
+    location / {
+        proxy_pass http://npt_public;
+        proxy_read_timeout 60s;
+        gzip on;
+        gzip_types application/json text/css application/javascript;
+    }
+}

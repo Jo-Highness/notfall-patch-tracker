@@ -1,0 +1,47 @@
+{% extends "admin/layout.html" %}
+{% block title %}Daten-Upload – {{ p.name }}{% endblock %}
+{% block content %}
+<p><a href="/admin/projekte/{{ p.id }}">← {{ p.name }}</a></p>
+<h1>Daten-Upload in das Projekt</h1>
+{% if p.status != "aktiv" %}<p class="msg msg-err" role="alert">Das Projekt ist {{ labels.PROJECT_STATUS[p.status] }} – eine Vorschau ist möglich, übernommen werden kann erst nach dem Wiederöffnen.</p>{% endif %}
+
+<section class="card">
+  {% if upload_error %}<p class="msg msg-err" role="alert" data-testid="upload-error">{{ upload_error }}</p>{% endif %}
+  <form method="post" action="/admin/projekte/{{ p.id }}/upload" enctype="multipart/form-data" class="form" data-testid="project-upload-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label title="Nur .xlsx (Excel-Export der Hauptliste oder Vorlage), Schlüssel System-ID. Leere Zellen löschen keine vorhandenen Werte – sie werden übersprungen. Abweichende gefüllte Felder (Konflikte) werden nur nach Ihrer Auswahl übernommen.">Datei (.xlsx, höchstens {{ upload_max_mb }} MB)
+      <input type="file" name="datei" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required data-testid="project-upload-file">
+    </label>
+    <button type="submit" class="btn btn-primary" data-testid="project-upload-submit" title="Es wird noch nichts geschrieben: zuerst erscheint die Vorschau mit Konflikten, Neubefüllungen und unbekannten System-IDs.">Hochladen und Vorschau anzeigen</button>
+  </form>
+  <div class="notice" data-testid="upload-empty-cells-hint">
+    <strong>Wichtig: Leere Zellen löschen keine vorhandenen Werte.</strong>
+    Eine leere Zelle (ebenso „Leer“ bzw. „(leer)“ in den Auswahlfeldern) bedeutet „kein Wert geliefert“ – der Wert im Projekt bleibt unverändert.
+    Werte leeren geht nur in der Hauptliste bzw. über „Stammdaten bearbeiten“.
+  </div>
+  <ul class="hint">
+    <li>Schlüssel ist die Spalte „System-ID“ (Pflicht). Spaltenzuordnung über die Kopfzeile wie beim Stammdatenimport (Groß-/Kleinschreibung und Leerzeichen egal) –
+      der Excel-Export der Hauptliste passt unverändert.</li>
+    <li>Der Upload darf <strong>alle</strong> Felder überschreiben, auch die Stammdatenfelder. Die Spalte „Herkunft“ wird ignoriert.</li>
+    <li>Auswahlfelder: erlaubt sind die Anzeigenamen (z. B. „{{ labels.AFFECTED["in_pruefung"] }}“, „{{ labels.ACTION_TAKEN["mitigiert"] }}“); andere Werte sind Fehler mit Zeilenangabe.</li>
+    <li>Die Vorschau zeigt <strong>Konflikte</strong> (Feld im Projekt gefüllt und abweichend – nur nach ausdrücklicher Auswahl übernommen),
+      <strong>Neubefüllungen</strong> (Feld im Projekt leer – werden übernommen), <strong>unbekannte System-IDs</strong> (Standard: ignorieren) und die Anzahl unveränderter Systeme.</li>
+    <li>Vor dem Schreiben wird automatisch ein Backup („vor Import“) erstellt; alle Änderungen stehen im Änderungsprotokoll.</li>
+  </ul>
+</section>
+
+{% if stages %}
+<section class="card">
+  <h2>Offene Vorschauen</h2>
+  <table class="tbl">
+    <thead><tr><th>Hochgeladen</th><th>Datei</th><th>von</th><th></th></tr></thead>
+    <tbody>
+    {% for s in stages %}
+      <tr><td>{{ s.created_at | dt }}</td><td>{{ s.file_name or "" }}</td><td><code>{{ s.created_by }}</code></td>
+        <td><a href="/admin/projekte/{{ p.id }}/upload/{{ s.id }}">Vorschau öffnen</a></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

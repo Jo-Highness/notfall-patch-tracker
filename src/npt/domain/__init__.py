@@ -1,0 +1,1 @@
+"""Fachliche Konstanten und Regeln."""

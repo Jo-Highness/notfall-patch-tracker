@@ -1,0 +1,15 @@
+{{- if .Values.public.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "npt.fullname" . }}-public
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public
+spec:
+  maxUnavailable: {{ .Values.public.pdb.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "npt.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public
+{{- end }}

@@ -1,0 +1,71 @@
+{% extends "admin/layout.html" %}
+{% block title %}Stammdaten – Notfall-Patch-Tracker{% endblock %}
+{% block content %}
+<h1>Stammdaten</h1>
+<p class="hint">Aktueller Bestand: <strong data-testid="master-total">{{ stats.total }}</strong> Systeme
+  {% if stats.missing_marked %}, davon <strong>{{ stats.missing_marked }}</strong> im letzten Import nicht mehr enthalten (markiert){% endif %}.
+  {% if stats.last_update %}Letzte Änderung: {{ stats.last_update | dt }}.{% endif %}
+  Neue Projekte erhalten eine Kopie dieses Bestands; bestehende Projekte bleiben unverändert.</p>
+
+<section class="card">
+  <h2>Excel-Import</h2>
+  {% if upload_error %}<p class="msg msg-err" role="alert" data-testid="upload-error">{{ upload_error }}</p>{% endif %}
+  <form method="post" action="/admin/stammdaten/upload" enctype="multipart/form-data" class="form" data-testid="master-upload-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Datei (.xlsx, höchstens {{ upload_max_mb }} MB)
+      <input type="file" name="datei" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required data-testid="master-upload-file">
+    </label>
+    <button type="submit" class="btn btn-primary" data-testid="master-upload-submit">Hochladen und Vorschau anzeigen</button>
+  </form>
+  <p class="hint">Die Spalten werden über die Kopfzeile zugeordnet (Groß-/Kleinschreibung und Leerzeichen egal).
+    Pflicht ist die Spalte „System-ID“. Vor der Übernahme zeigt eine Vorschau neue, geänderte und fehlende Systeme.
+    System-IDs mit dem Präfix „NEW-“ sind für manuell angelegte Systeme reserviert und werden nicht übernommen.
+    <a href="/admin/stammdaten/vorlage.xlsx" data-testid="master-template">Excel-Vorlage herunterladen</a></p>
+</section>
+
+{% if stages %}
+<section class="card">
+  <h2>Offene Vorschauen</h2>
+  <table class="tbl">
+    <thead><tr><th>Hochgeladen</th><th>Datei</th><th>von</th><th></th></tr></thead>
+    <tbody>
+    {% for s in stages %}
+      <tr><td>{{ s.created_at | dt }}</td><td>{{ s.file_name or "" }}</td><td><code>{{ s.created_by }}</code></td>
+        <td><a href="/admin/stammdaten/vorschau/{{ s.id }}">Vorschau öffnen</a></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Import-Historie</h2>
+  {% if imports %}
+  <table class="tbl" data-testid="import-history">
+    <thead><tr><th>Zeitpunkt</th><th>Quelle</th><th>Datei</th><th>Admin</th><th>neu</th><th>geändert</th><th>entfernt</th><th>fehlend (behalten)</th><th>SHA-256</th></tr></thead>
+    <tbody>
+    {% for i in imports %}
+      <tr><td>{{ i.imported_at | dt }}</td><td>{{ labels.MASTER_SOURCE.get(i.source, i.source) }}</td><td>{{ i.file_name or "" }}</td>
+        <td><code>{{ i.admin_identifier }}</code></td><td>{{ i.count_new }}</td><td>{{ i.count_changed }}</td>
+        <td>{{ i.count_removed }}</td><td>{{ i.count_missing_kept }}</td><td><code title="{{ i.file_hash or '' }}">{{ (i.file_hash or "")[:12] }}</code></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="hint">Noch kein Import.</p>
+  {% endif %}
+</section>
+
+{% if missing %}
+<section class="card">
+  <h2>Markierte Systeme (im letzten Import nicht enthalten)</h2>
+  <table class="tbl">
+    <thead><tr><th>System-ID</th><th>System-Name</th><th>fehlt seit</th></tr></thead>
+    <tbody>
+    {% for m in missing %}<tr><td>{{ m.system_id }}</td><td>{{ m.system_name or "" }}</td><td>{{ m.missing_since | dt }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <p class="hint">Entfernen lassen sie sich bei einem späteren Import durch ausdrückliche Auswahl in der Vorschau.</p>
+</section>
+{% endif %}
+{% endblock %}

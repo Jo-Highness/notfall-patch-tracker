@@ -1,0 +1,37 @@
+# Traefik als Bearbeiter-Edge im kind-Test (Namespace npt-edge). NodePort nur im Docker-
+# Netz "kind" erreichbar (kein Host-Port). Access-Log ohne Pfad und ohne Header, damit der
+# Projekt-Token nicht im Log steht (docs/KUBERNETES.md, „Traefik“).
+deployment:
+  replicas: 1
+ingressClass:
+  enabled: true
+  isDefaultClass: false
+  name: traefik
+providers:
+  kubernetesCRD:
+    enabled: false
+  kubernetesIngress:
+    enabled: true
+service:
+  type: NodePort
+ports:
+  web:
+    port: 8000
+    nodePort: 30080
+    expose:
+      default: true
+  websecure:
+    expose:
+      default: false
+log:
+  level: INFO
+  format: json
+accessLog:
+  enabled: true
+  format: json
+  fields:
+    defaultMode: keep
+    names:
+      RequestPath: drop
+    headers:
+      defaultMode: drop

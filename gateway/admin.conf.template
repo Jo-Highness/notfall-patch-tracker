@@ -1,0 +1,92 @@
+# Gerendert von entrypoint.sh (envsubst nur fuer die hier genannten ${...}-Variablen).
+
+# Lokaler Health-Listener (nicht veroeffentlicht) fuer den Docker-Healthcheck.
+server {
+    listen 127.0.0.1:8080;
+    access_log off;
+    location = /gw-health { return 200 "ok\n"; }
+    location / { return 404; }
+}
+
+server {
+    listen 8443 ssl;
+    http2 on;
+    server_name _;
+
+    ssl_certificate         ${GATEWAY_TLS_CERT_PATH};
+    ssl_certificate_key     ${GATEWAY_TLS_KEY_PATH};
+    ssl_protocols           TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_tickets     off;
+    ssl_session_cache       shared:npt_tls:5m;
+
+    # mTLS: nur Zertifikate der konfigurierten CA(s).
+    ssl_client_certificate  ${ADMIN_CA_BUNDLE_PATH};
+    ssl_verify_client       on;
+    ssl_verify_depth        ${ADMIN_VERIFY_DEPTH};
+    include /etc/nginx/conf.d/npt-crl.inc;
+
+    client_max_body_size    ${GATEWAY_MAX_BODY};
+
+    # Fehlendes/ungueltiges Zertifikat (nginx-intern 495/496) -> 403 ohne Details.
+    error_page 403 495 496 = @mtls_denied;
+    location @mtls_denied {
+        include /etc/nginx/conf.d/npt-security-headers.inc;
+        default_type text/plain;
+        return 403 "Client-Zertifikat fehlt oder ist ungueltig.\n";
+    }
+    # Upload groesser als UPLOAD_MAX_MB (+1 MB) -> verstaendliche Meldung mit Headern.
+    error_page 413 = @too_large;
+    location @too_large {
+        include /etc/nginx/conf.d/npt-security-headers.inc;
+        default_type text/plain;
+        return 413 "Datei zu gross (Grenze: UPLOAD_MAX_MB).\n";
+    }
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    location = /robots.txt {
+        include /etc/nginx/conf.d/npt-security-headers.inc;
+        default_type text/plain;
+        return 200 "User-agent: *\nDisallow: /\n";
+    }
+
+    location = /admin {
+        include /etc/nginx/conf.d/npt-security-headers.inc;
+        return 308 /admin/;
+    }
+
+    location /admin/ {
+        # Doppelte Absicherung (NPT-06): Gateway prueft selbst noch einmal.
+        if ($ssl_client_verify != SUCCESS) { return 403; }
+
+        proxy_pass http://${ADMIN_UPSTREAM};
+        proxy_http_version 1.1;
+
+        # Vertrauens-Header IMMER selbst setzen (ueberschreibt Client-Header gleichen Namens).
+        proxy_set_header X-SSL-Client-Verify      $ssl_client_verify;
+        proxy_set_header X-SSL-Client-S-DN        $ssl_client_s_dn;
+        proxy_set_header X-SSL-Client-I-DN        $ssl_client_i_dn;
+        proxy_set_header X-SSL-Client-Serial      $ssl_client_serial;
+        proxy_set_header X-SSL-Client-Fingerprint $ssl_client_fingerprint;
+        proxy_set_header X-SSL-Client-Cert        $ssl_client_escaped_cert;
+        proxy_set_header X-Forwarded-For          $remote_addr;
+        proxy_set_header X-Forwarded-Proto        https;
+        proxy_set_header X-Forwarded-Host         $http_host;
+        proxy_set_header X-Forwarded-Port         $server_port;
+        proxy_set_header X-Real-IP                $remote_addr;
+        proxy_set_header Forwarded                "";
+        proxy_set_header Host                     $http_host;
+        proxy_set_header Connection               "";
+
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    # Nur /admin wird weitergeleitet.
+    location / {
+        include /etc/nginx/conf.d/npt-security-headers.inc;
+        default_type text/plain;
+        return 404 "Nicht gefunden.\n";
+    }
+}

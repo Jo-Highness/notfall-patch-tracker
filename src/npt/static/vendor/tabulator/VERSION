@@ -1,0 +1,6 @@
+tabulator-tables 6.7.1 (MIT, siehe LICENSE)
+Quelle: npm registry, tabulator-tables-6.7.1.tgz
+  sha512 (Registry-Integrity, geprueft): 6CMy17XdemQaIdg1BOqD5K6nzF2xoD47eRNiBYJBK+QrLWji7sgukyPjKXYrjRdWLwbGENdUsiAYJrNS3XeUfw==
+Uebernommen: dist/js/tabulator.min.js, dist/css/tabulator.min.css (jeweils ohne sourceMappingURL-Kommentar)
+  sha256 tabulator.min.js:  d4fd5e30fba7fc5d1841b119d9548675c605ee75a84a5512c7f19ad74a4d361c
+  sha256 tabulator.min.css: 1a70eeb7c860cd62938e3a233c6536b0f177240e60e47cd9896a33a9dc2c90dc

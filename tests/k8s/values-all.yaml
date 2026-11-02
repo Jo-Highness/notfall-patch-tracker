@@ -1,0 +1,44 @@
+# Nur fuer helm template/kubeconform: schaltet alle optionalen Ressourcen ein
+# (HPA, HTTPRoute, TLSRoute, LoadBalancer, DB-TLS, SMTP, Stammdaten-API, Secret).
+image:
+  app: { registry: ghcr.io, repository: example/notfall-patch-tracker, tag: "0.1.0",
+         digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000" }
+  gateway: { registry: ghcr.io, repository: example/notfall-patch-tracker-gateway, tag: "0.1.0" }
+publicBaseUrl: https://npt.example.org
+adminBaseUrl: https://npt-admin.example.org
+config:
+  adminBootstrapIds: ["CN=Admin,O=Beispiel"]
+  smtp: { host: smtp.example.org, user: npt, from: "NPT <npt@example.org>" }
+  masterApi: { enabled: true, url: https://cmdb.example.org/api, scheduleMinutes: 60 }
+secrets:
+  create: true
+  values: { CSRF_SECRET: "nur-fuer-template-tests-0123456789abcdef", DATABASE_URL: "postgresql://npt:x@db/npt" }
+database:
+  existingSecret: npt-db-app
+  urlKey: uri
+  tls: { sslmode: verify-full, secretName: npt-db-ca, rootCertKey: ca.crt }
+public:
+  trustedProxyCIDRs: [10.0.0.0/8]
+  replicas: 2
+  hpa: { enabled: true, maxReplicas: 3 }
+backend:
+  persistence: { existingClaim: npt-backups }
+admin:
+  service: { type: LoadBalancer, loadBalancerSourceRanges: [192.0.2.0/24] }
+  tls: { secretName: npt-gw-tls }
+  clientCa: { secretName: npt-client-ca }
+  crl: { enabled: true, configMapName: npt-crl }
+  tlsRoute: { enabled: true, parentRefs: [{ name: eg, namespace: envoy-gateway-system, sectionName: tls }], hostnames: [npt-admin.example.org] }
+httpRoute:
+  enabled: true
+  parentRefs: [{ name: eg, namespace: envoy-gateway-system }]
+  hostnames: [npt.example.org]
+networkPolicy:
+  ingressController:
+    namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: envoy-gateway-system } }
+  database:
+    podSelector: { matchLabels: { cnpg.io/cluster: npt-db } }
+  smtp: { cidrs: [192.0.2.25/32] }
+  masterApi: { cidrs: [192.0.2.80/32] }
+  adminIngressFrom:
+    - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: envoy-gateway-system } }

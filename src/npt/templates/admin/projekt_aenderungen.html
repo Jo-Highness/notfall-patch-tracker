@@ -1,0 +1,57 @@
+{% extends "admin/layout.html" %}
+{% block title %}Änderungsprotokoll – {{ p.name }}{% endblock %}
+{% block content %}
+<p><a href="/admin/projekte/{{ p.id }}">← {{ p.name }}</a></p>
+<h1>Änderungsprotokoll</h1>
+<form method="get" action="/admin/projekte/{{ p.id }}/aenderungen" class="form filter-form" data-testid="log-filter">
+  <label>System-ID enthält
+    <input type="text" name="sid" value="{{ flt.system_id }}" maxlength="200" data-testid="log-filter-sid">
+  </label>
+  <label>Feld
+    <select name="feld" data-testid="log-filter-field">
+      <option value="">alle</option>
+      <option value="{{ field_created }}"{% if flt.field == field_created %} selected{% endif %}>(System angelegt)</option>
+      {% for f in log_fields %}<option value="{{ f }}"{% if flt.field == f %} selected{% endif %}>{{ fields.DISPLAY_NAMES[f] }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Quelle
+    <select name="quelle" data-testid="log-filter-source">
+      <option value="">alle</option>
+      {% for k, v in labels.CHANGE_SOURCE.items() %}<option value="{{ k }}"{% if flt.source == k %} selected{% endif %}>{{ v }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>von <input type="date" name="von" value="{{ flt.date_from.isoformat() if flt.date_from else '' }}" data-testid="log-filter-from"></label>
+  <label>bis <input type="date" name="bis" value="{{ flt.date_to.isoformat() if flt.date_to else '' }}" data-testid="log-filter-to"></label>
+  <button type="submit" class="btn btn-primary">Filtern</button>
+  {% if flt.active %}<a href="/admin/projekte/{{ p.id }}/aenderungen">Filter zurücksetzen</a>{% endif %}
+</form>
+<p class="hint"><span data-testid="log-total">{{ page.total }}</span> Einträge{% if flt.active %} (gefiltert){% endif %}, Zeit in Europe/Berlin, neueste zuerst.
+  <a href="{{ export_link }}" data-testid="log-export">Export (.xlsx){% if flt.active %} – gefilterte Einträge{% endif %}</a></p>
+<table class="tbl" data-testid="log-table">
+  <thead><tr><th>Zeitpunkt</th><th>System-ID</th><th>Aktion</th><th>Feld</th><th>alt</th><th>neu</th><th>Quelle</th><th>Wer</th><th>IP</th></tr></thead>
+  <tbody>
+  {% for e in page.entries %}
+    <tr>
+      <td>{{ e.changed_at | dt }}</td>
+      <td data-testid="log-sid">{{ e.system_id }}</td>
+      <td>{{ labels.CHANGE_ACTION.get(e.action, e.action) }}</td>
+      <td>{{ cl.field_label(e) }}</td>
+      <td class="old">{{ cl.value_text(e, e.old_value) }}</td>
+      <td class="new">{{ cl.value_text(e, e.new_value) }}</td>
+      <td>{{ labels.CHANGE_SOURCE.get(e.source, e.source) }}</td>
+      <td data-testid="log-who">{% if e.admin_identifier %}<code>{{ e.admin_identifier }}</code>{% else %}{{ e.client_name or "" }}{% endif %}</td>
+      <td>{{ e.client_ip or "" }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9">Keine Einträge.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% if page.pages > 1 %}
+<nav class="pager" data-testid="log-pager">
+  {% if page.page > 1 %}<a href="{{ page_link(page.page - 1) }}" data-testid="log-prev">← neuer</a>{% endif %}
+  <span>Seite {{ page.page }} von {{ page.pages }}</span>
+  {% if page.page < page.pages %}<a href="{{ page_link(page.page + 1) }}" data-testid="log-next">älter →</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

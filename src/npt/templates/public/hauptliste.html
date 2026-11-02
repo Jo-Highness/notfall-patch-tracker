@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} – Notfall-Patch-Tracker{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="{{ static_prefix }}/vendor/tabulator/tabulator.min.css">
+  <script src="{{ static_prefix }}/vendor/tabulator/tabulator.min.js" defer></script>
+  <script src="{{ static_prefix }}/js/npt-filter.js" defer></script>
+  <script src="{{ static_prefix }}/js/npt-live.js" defer></script>
+  <script src="{{ static_prefix }}/js/hauptliste.js" defer></script>
+{% endblock %}
+{% block body_class %}page-list{% endblock %}
+{% block main_class %}content content-wide{% endblock %}
+{% block nav %}{% include "public/project_nav.html" %}{% endblock %}
+{% block content %}
+<script type="application/json" id="npt-config">{{ config | tojson }}</script>
+{% if project.read_only %}
+<p class="msg msg-err" role="status" data-testid="readonly-banner">Dieses Projekt ist {{ status_label }} und schreibgeschützt.</p>
+{% endif %}
+<div class="toolbar">
+  <label class="search">Suche
+    <input type="search" id="global-search" placeholder="alle Spalten durchsuchen …" autocomplete="off" data-testid="global-search">
+  </label>
+  <span class="counter" id="counter" data-testid="counter" aria-live="polite">Lade …</span>
+  <button type="button" class="btn" id="reset-filters" data-testid="reset-filters">Filter zurücksetzen</button>
+  <span class="spacer"></span>
+  <a class="btn" id="export-view" href="{{ project.base }}/export.xlsx?umfang=sicht" data-testid="export-view">Export (Sicht)</a>
+  <a class="btn" id="export-all" href="{{ project.base }}/export.xlsx?umfang=alle" data-testid="export-all">Export (alle)</a>
+  {% if not project.read_only %}
+  <button type="button" class="btn btn-primary" id="new-system-open" data-testid="new-system-open">Neues System anlegen</button>
+  {% endif %}
+</div>
+<p class="msg msg-err" id="live-banner" role="alert" data-testid="live-banner" hidden></p>
+<div id="prefilters" class="prefilters" data-testid="prefilters" hidden></div>
+<div class="status-row">
+  <div id="status-line" class="status-line" role="status" aria-live="polite" data-testid="status-line"></div>
+  <button type="button" class="btn btn-small" id="refresh-view" data-testid="refresh-view" hidden title="Filter und Sortierung auf die geänderten Daten neu anwenden">Ansicht aktualisieren</button>
+</div>
+<div id="live-hint" class="live-hint" role="alert" data-testid="live-hint" hidden>
+  <span id="live-hint-text" data-testid="live-hint-text"></span>
+  <button type="button" class="btn btn-small" id="live-hint-take" data-testid="live-hint-take">Übernehmen</button>
+  <button type="button" class="btn btn-small" id="live-hint-keep" data-testid="live-hint-keep">Behalten</button>
+</div>
+{% if not project.read_only %}
+<p class="edit-legend" data-testid="edit-legend"><span class="swatch"></span>Gelb hinterlegte Spalten (✎) bitte für jedes System ausfüllen – in die Zelle klicken.</p>
+{% endif %}
+<div id="grid" data-testid="grid"></div>
+
+<dialog id="conflict-dialog" data-testid="conflict-dialog">
+  <form method="dialog" class="dialog-form">
+    <h2>Zwischenzeitlich geändert</h2>
+    <p>Das Feld <strong id="conflict-field"></strong> von System <strong id="conflict-system"></strong> wurde inzwischen von jemand anderem geändert.</p>
+    <dl class="facts">
+      <dt>Aktueller Wert</dt><dd id="conflict-current" data-testid="conflict-current"></dd>
+      <dt>Ihr Wert</dt><dd id="conflict-mine" data-testid="conflict-mine"></dd>
+    </dl>
+    <div class="dialog-actions">
+      <button value="take" class="btn" data-testid="conflict-take">Aktuellen Wert übernehmen</button>
+      <button value="overwrite" class="btn btn-danger" data-testid="conflict-overwrite">Trotzdem überschreiben</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="name-dialog" data-testid="name-dialog">
+  <form method="dialog" class="dialog-form">
+    <h2>Wer bearbeitet?</h2>
+    <p class="hint">Optional: Ihr Name oder Kürzel wird zu Ihren Änderungen protokolliert und in diesem Browser gemerkt.</p>
+    <label>Name/Kürzel <input type="text" id="name-input" maxlength="100" autocomplete="name" data-testid="name-input"></label>
+    <div class="dialog-actions">
+      <button value="save" class="btn btn-primary" data-testid="name-save">Übernehmen</button>
+      <button value="skip" class="btn" data-testid="name-skip">Überspringen</button>
+    </div>
+  </form>
+</dialog>
+
+{% if not project.read_only %}
+<dialog id="new-system-dialog" data-testid="new-system-dialog">
+  <form id="new-system-form" class="dialog-form form" novalidate>
+    <h2>Neues System anlegen</h2>
+    <p class="hint">Alle Stammdatenfelder sind Pflicht. Die System-ID wird automatisch vergeben (NEW-…). Stammdaten können danach nur noch vom Admin korrigiert werden.</p>
+    <div class="form-grid">
+      {% for name in fields.MASTER_DATA_FIELDS %}
+      <label>{{ fields.DISPLAY_NAMES[name] }} *
+        {% if name == "system_description" %}
+        <textarea name="{{ name }}" required maxlength="{{ fields.MASTER_FIELD_MAX[name] }}" rows="2" data-testid="new-{{ name }}"></textarea>
+        {% else %}
+        <input type="text" name="{{ name }}" required maxlength="{{ fields.MASTER_FIELD_MAX[name] }}"
+               {% if name in config.suggestFields %}list="dl-{{ name }}"{% endif %} autocomplete="off" data-testid="new-{{ name }}"
+               {% if name == 'app_owner' %}inputmode="email" placeholder="name@firma.de"{% endif %}>
+        {% if name in config.suggestFields %}<datalist id="dl-{{ name }}"></datalist>{% endif %}
+        {% endif %}
+        <span class="field-error" data-error-for="{{ name }}"></span>
+      </label>
+      {% endfor %}
+      <label title="{{ labels.FIELD_HINTS["affected"] }}">{{ fields.DISPLAY_NAMES["affected"] }}
+        <select name="affected" data-testid="new-affected"><option value="">(leer)</option>{% for k, v in config.columns[4].enum.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+      </label>
+      <label title="{{ labels.FIELD_HINTS["installed_version"] }}">{{ fields.DISPLAY_NAMES["installed_version"] }}
+        <input type="text" name="installed_version" maxlength="255" autocomplete="off" data-testid="new-installed_version">
+      </label>
+      <label title="{{ labels.FIELD_HINTS["action_taken"] }}">{{ fields.DISPLAY_NAMES["action_taken"] }}
+        <select name="action_taken" data-testid="new-action_taken"><option value="">(leer)</option>{% for k, v in config.columns[6].enum.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+      </label>
+      <label class="wide" title="{{ labels.FIELD_HINTS["remark"] }}">{{ fields.DISPLAY_NAMES["remark"] }}
+        <textarea name="remark" maxlength="4000" rows="2" data-testid="new-remark"></textarea>
+      </label>
+    </div>
+    <p class="msg msg-err" id="new-system-error" hidden data-testid="new-system-error"></p>
+    <div class="dialog-actions">
+      <button type="submit" class="btn btn-primary" data-testid="new-system-submit">Anlegen</button>
+      <button type="button" class="btn" id="new-system-cancel" data-testid="new-system-cancel">Abbrechen</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}

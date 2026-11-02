@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "npt.fullname" . }}-public
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public
+spec:
+  type: ClusterIP
+  # Keine Sticky Sessions: Live-Updates laufen datenbankweit (LISTEN/NOTIFY, K5).
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "npt.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: public

@@ -1,0 +1,23 @@
+{{- $r := .Values.admin.tlsRoute -}}
+{{- if $r.enabled }}
+# TLS-Passthrough: der Gateway-API-Controller leitet nur weiter, TLS (mTLS) endet im
+# Gateway-Sidecar des backend-Pods (K3).
+apiVersion: {{ $r.apiVersion }}
+kind: TLSRoute
+metadata:
+  name: {{ include "npt.fullname" . }}-admin
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  parentRefs:
+    {{- toYaml $r.parentRefs | nindent 4 }}
+  {{- with $r.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - backendRefs:
+        - name: {{ include "npt.fullname" . }}-admin
+          port: {{ .Values.admin.service.port }}
+{{- end }}

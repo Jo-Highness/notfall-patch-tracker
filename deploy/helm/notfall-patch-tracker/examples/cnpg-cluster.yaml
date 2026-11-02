@@ -1,0 +1,58 @@
+# Beispiel: PostgreSQL per CloudNativePG-Operator (https://cloudnative-pg.io) fuer den
+# Notfall-Patch-Tracker. Nicht Teil des Charts (externe DB, K6); Operator vorher installieren.
+#
+#   kubectl apply -n npt -f examples/cnpg-cluster.yaml
+#
+# Der Operator legt u. a. an:
+#   Secret  npt-db-app  (username, password, host, port, dbname, uri, ...)
+#   Secret  npt-db-ca   (ca.crt: CA des Serverzertifikats)
+#   Service npt-db-rw   (Primary)
+#
+# Passende Chart-Werte:
+#   database:
+#     existingSecret: npt-db-app
+#     urlKey: uri                  # postgresql://... wird zu postgresql+psycopg:// (C4)
+#     tls:
+#       sslmode: verify-full
+#       secretName: npt-db-ca
+#       rootCertKey: ca.crt
+#     maxConnections: 200          # = max_connections unten
+#   networkPolicy:
+#     database:
+#       podSelector:
+#         matchLabels: { cnpg.io/cluster: npt-db }
+#
+# Betreiberpflichten (docs/KUBERNETES.md, „Datenbank“): Log-Parameter wie unten, kein
+# Superuser fuer die App, Backup/PITR (z. B. Barman-Cloud-Plugin) einrichten.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: npt-db
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.15
+  primaryUpdateStrategy: unsupervised
+  enableSuperuserAccess: false
+  bootstrap:
+    initdb:
+      database: npt
+      owner: npt
+      encoding: UTF8
+      localeCollate: C.UTF-8
+      localeCType: C.UTF-8
+  postgresql:
+    parameters:
+      # Verbindungsbudget des Charts (deploy/helm, database.maxConnections).
+      max_connections: "200"
+      # Gebundene Parameter (Projekt-Token) und DETAIL von Fehlern (Personendaten) nie ins Log.
+      log_parameter_max_length: "0"
+      log_parameter_max_length_on_error: "0"
+      log_error_verbosity: terse
+      log_min_duration_statement: "1000"
+  storage:
+    size: 10Gi
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 1Gi }
+  # Backups/PITR: z. B. Barman-Cloud-Plugin (plugin-barman-cloud) mit Objektspeicher;
+  # Zugangsdaten nur als Secret, nicht in dieser Datei.

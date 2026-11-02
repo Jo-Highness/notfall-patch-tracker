@@ -1,0 +1,22 @@
+{{- $p := .Values.backend.persistence -}}
+{{- if and $p.enabled (not $p.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "npt.fullname" . }}-backups
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+  annotations:
+    # helm uninstall laesst die Backup-Dateien stehen (K7).
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    {{- toYaml $p.accessModes | nindent 4 }}
+  {{- if $p.storageClass }}
+  storageClassName: {{ if eq $p.storageClass "-" }}""{{ else }}{{ $p.storageClass }}{{ end }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $p.size }}
+{{- end }}

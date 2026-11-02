@@ -1,0 +1,37 @@
+{{- $s := .Values.admin.service -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "npt.fullname" . }}-admin
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+  {{- with $s.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  # TLS endet nur im Gateway-Sidecar (L4, kein TLS-Terminieren davor, K3).
+  type: {{ $s.type }}
+  {{- if ne $s.type "ClusterIP" }}
+  # Local erhaelt die Client-IP (Audit, adminSourceCIDRs).
+  externalTrafficPolicy: {{ $s.externalTrafficPolicy }}
+  {{- end }}
+  {{- if and (eq $s.type "LoadBalancer") $s.loadBalancerIP }}
+  loadBalancerIP: {{ $s.loadBalancerIP }}
+  {{- end }}
+  {{- if and (eq $s.type "LoadBalancer") $s.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml $s.loadBalancerSourceRanges | nindent 4 }}
+  {{- end }}
+  ports:
+    - name: https
+      port: {{ $s.port }}
+      targetPort: https
+      protocol: TCP
+      {{- if and (eq $s.type "NodePort") $s.nodePort }}
+      nodePort: {{ $s.nodePort }}
+      {{- end }}
+  selector:
+    {{- include "npt.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: backend

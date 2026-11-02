@@ -1,0 +1,193 @@
+{% extends "admin/layout.html" %}
+{% block title %}{% if c %}Kampagne #{{ c.id }}{% else %}Neue Kampagne{% endif %} – {{ p.name }}{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ static_prefix }}/vendor/quill/quill.snow.css">
+<script src="{{ static_prefix }}/vendor/quill/quill.min.js" defer></script>
+<script src="{{ static_prefix }}/js/mail.js" defer></script>
+{% endblock %}
+{% block content %}
+<p><a href="/admin/projekte/{{ p.id }}/mail">← Mailversand „{{ p.name }}“</a></p>
+<h1>{% if c %}Kampagne #{{ c.id }}{% else %}Neue Kampagne{% endif %}</h1>
+{% if form_error %}<p class="msg msg-err" role="alert" data-testid="mail-form-error">{{ form_error }}</p>{% endif %}
+
+<section class="card">
+  <h2>1. Betreff, Text und Zielgruppe</h2>
+  <form method="post" action="/admin/projekte/{{ p.id }}/mail{% if c %}/{{ c.id }}{% endif %}" class="form" id="mail-form" data-testid="mail-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Betreff
+      <input type="text" name="subject" maxlength="200" required value="{{ form.subject }}" data-testid="mail-subject">
+    </label>
+    <p class="hint">Der Betreff ist eine Klartextzeile – Betreffzeilen von Mails kennen keine Formatierung.</p>
+    <label for="mail-body">Text</label>
+    <div id="mail-editor-wrap" class="mail-editor" hidden>
+      <div id="mail-editor" data-testid="mail-editor"></div>
+    </div>
+    <textarea name="body_html" id="mail-body" rows="12" data-testid="mail-body">{{ form.body_html }}</textarea>
+    <p class="hint">Formatierung: Überschriften, fett, kursiv, Listen, Links (nur http, https, mailto). Der Platzhalter
+      <code>[LINK]</code> – am besten als eigener Absatz – wird je Empfänger durch die Links auf seine Systeme
+      (System-Name und System-ID) und „Alle meine Systeme“ ersetzt.
+      <button type="button" class="btn btn-small" id="mail-insert-link" data-testid="mail-insert-link" hidden>[LINK] einfügen</button></p>
+
+    <fieldset class="mail-selectors">
+      <legend>Zielgruppe (nur Systeme dieses Projekts)</legend>
+      {% for sel in selectors %}
+      <label class="check mail-selector"><input type="radio" name="selector" value="{{ sel.key }}"{% if form.selector == sel.key %} checked{% endif %} required data-testid="mail-selector-{{ sel.key }}">
+        <strong>{{ sel.name }}</strong><span class="hint"> – {{ sel.description }}</span></label>
+      {% endfor %}
+      <label>Filter der Hauptliste (für „Benutzerdefiniert“)
+        <input type="text" name="custom_query" value="{{ form.custom_query }}" maxlength="20000" data-testid="mail-custom-query"
+               placeholder="{{ list_base }}?f.digital_access_zone=…">
+      </label>
+      <p class="hint">In der <a href="{{ list_base }}" target="_blank" rel="noopener noreferrer" data-testid="mail-open-list">Hauptliste</a>
+        filtern bzw. suchen, die Adresse aus der Adresszeile kopieren („als Mail-Zielgruppe verwenden“) und hier einfügen.
+        Übernommen werden Filter und Suche, nicht die Sortierung.</p>
+    </fieldset>
+    <button type="submit" class="btn btn-primary" data-testid="mail-save">Speichern und Vorschau</button>
+  </form>
+</section>
+
+{% if c %}
+<section class="card" data-testid="mail-preview">
+  <h2>2. Vorschau</h2>
+  <div class="kpis">
+    <div class="kpi-card"><span class="kpi-value" data-testid="mail-recipient-count">{{ audience.recipient_count }}</span>
+      <span class="kpi-label">Empfänger (je Adresse genau eine Mail)</span></div>
+    <div class="kpi-card"><span class="kpi-value" data-testid="mail-system-count">{{ audience.system_count }}</span>
+      <span class="kpi-label">Systeme in der Zielgruppe</span></div>
+    <div class="kpi-card"><span class="kpi-value" data-testid="mail-skipped-count">{{ skipped_total }}</span>
+      <span class="kpi-label">Systeme mit leerer/ungültiger Angabe ({{ audience.systems_without_recipient }} ganz ohne gültige Adresse)</span></div>
+  </div>
+  <p class="hint">Zielgruppe: <strong>{{ (selectors | selectattr("key", "equalto", c.selector) | first).name }}</strong>
+    {% if selector_params %}(Filter <code data-testid="mail-selector-filter">{% for k, v in selector_params %}{{ k }}={{ v }}{% if not loop.last %}&amp;{% endif %}{% endfor %}</code>){% else %}(kein Filter – alle Systeme){% endif %}
+    – <a href="{{ selector_link }}" target="_blank" rel="noopener noreferrer" data-testid="mail-selector-link">in der Hauptliste ansehen</a></p>
+  {% if not has_placeholder %}<p class="msg msg-err" role="alert" data-testid="mail-no-placeholder">Der Text enthält keinen Platzhalter <code>[LINK]</code> – die Empfänger erhalten dann keine Links auf ihre Systeme.</p>{% endif %}
+
+  {% if audience.recipients %}
+  <form method="get" action="/admin/projekte/{{ p.id }}/mail/{{ c.id }}" class="form inline-form">
+    <label>Beispielmail für
+      <select name="empfaenger" data-testid="mail-sample-select">
+        {% for r in audience.recipients %}<option value="{{ r.email }}"{% if sample and r.email == sample.email %} selected{% endif %}>{{ r.email }} ({{ r.systems | length }})</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn">Anzeigen</button>
+  </form>
+  {% endif %}
+  {% if rendered %}
+  <div class="mail-sample" data-testid="mail-sample">
+    <p class="mail-sample-head"><strong>An:</strong> <span data-testid="mail-sample-to">{{ sample.email }}</span><br>
+      <strong>Betreff:</strong> <span data-testid="mail-sample-subject">{{ rendered.subject }}</span></p>
+    <div class="mail-sample-body" data-testid="mail-sample-body">{{ rendered.html_body | safe }}</div>
+    <details><summary>Textfassung (Plaintext-Teil der Mail)</summary><pre class="mail-text" data-testid="mail-sample-text">{{ rendered.text }}</pre></details>
+  </div>
+  {% else %}
+  <p class="hint" data-testid="mail-no-recipients">Die Zielgruppe enthält derzeit keine gültigen Empfänger.</p>
+  {% endif %}
+
+  {% if skipped %}
+  <details class="mail-skipped"{% if skipped | length <= 20 %} open{% endif %}>
+    <summary>Übersprungene Adressen ({{ skipped | length }} Angaben, {{ skipped_total }} Systeme)</summary>
+    <table class="tbl" data-testid="mail-skipped">
+      <thead><tr><th>Grund</th><th>Angabe im Feld „Anwendungsverantwortlicher“</th><th>Systeme</th></tr></thead>
+      <tbody>
+      {% for e in skipped %}
+        <tr><td>{% if e.reason == "leer" %}leer{% else %}ungültig{% endif %}</td><td>{% if e.value %}<code>{{ e.value }}</code>{% else %}<span class="hint">(leer)</span>{% endif %}</td>
+          <td>{{ e.system_ids[:20] | join(", ") }}{% if e.system_ids | length > 20 %} … (+{{ e.system_ids | length - 20 }}){% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endif %}
+</section>
+
+<section class="card" data-testid="mail-test">
+  <h2>3. Testmail</h2>
+  {% if smtp_ok %}
+  <form method="post" action="/admin/projekte/{{ p.id }}/mail/{{ c.id }}/test" class="form inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="sample" value="{{ sample.email if sample else '' }}">
+    <label>An (frei wählbar)
+      <input type="text" name="to" required maxlength="254" autocomplete="email" data-testid="mail-test-to">
+    </label>
+    <button type="submit" class="btn" data-testid="mail-test-send">Testmail senden</button>
+  </form>
+  <p class="hint">Die Testmail enthält die Systeme des oben gewählten Beispiel-Empfängers{% if sample %} ({{ sample.email }}){% endif %}, Betreff mit „[TEST]“. Sie zählt nicht als Versand.</p>
+  {% else %}
+  <p class="msg msg-err" data-testid="mail-smtp-error">Mailversand nicht konfiguriert ({{ smtp_error }}). SMTP_* in der Umgebung setzen.</p>
+  {% endif %}
+</section>
+
+<section class="card" data-testid="mail-send">
+  <h2>4. Versand</h2>
+  {% if status and status.active %}
+  <p data-testid="mail-running">Lauf {{ status.run.send_run }} läuft – {{ status.counts.ausstehend }} ausstehend, {{ status.counts.in_versand }} in Versand.</p>
+  <form method="post" action="/admin/projekte/{{ p.id }}/mail/{{ c.id }}/abbrechen" class="inline" data-confirm="Noch ausstehende Mails dieses Laufs abbrechen?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn btn-danger" data-testid="mail-cancel">Ausstehende abbrechen</button>
+  </form>
+  {% elif not smtp_ok %}
+  <p class="hint">Versand erst nach SMTP-Konfiguration möglich.</p>
+  {% elif p.status != "aktiv" %}
+  <p class="hint">Versand nur in aktiven Projekten.</p>
+  {% else %}
+    {% if audience.recipient_count %}
+    <form method="post" action="/admin/projekte/{{ p.id }}/mail/{{ c.id }}/senden" class="form"
+          data-confirm="Mail jetzt an {{ audience.recipient_count }} Empfänger senden?" data-testid="mail-send-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="mode" value="alle">
+      <input type="hidden" name="expected_run" value="{{ c.send_run }}">
+      <input type="hidden" name="expected_count" value="{{ audience.recipient_count }}">
+      <label class="check"><input type="checkbox" name="confirm" value="ja" required data-testid="mail-send-confirm">
+        Vorschau geprüft: {% if c.send_run %}<strong>erneut</strong> {% endif %}an <strong>{{ audience.recipient_count }}</strong> Empfänger senden{% if c.send_run %} (neuer Lauf {{ c.send_run + 1 }}){% endif %}.</label>
+      <p><button type="submit" class="btn btn-primary" data-testid="mail-send-submit">{% if c.send_run %}Erneut an alle senden{% else %}Versand starten{% endif %} ({{ audience.recipient_count }} Empfänger)</button></p>
+    </form>
+    {% endif %}
+    {% if failed_last %}
+    <form method="post" action="/admin/projekte/{{ p.id }}/mail/{{ c.id }}/senden" class="form"
+          data-confirm="Die {{ failed_last }} zuletzt fehlgeschlagenen Mails erneut senden?" data-testid="mail-resend-failed-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="mode" value="nur_fehlgeschlagene">
+      <input type="hidden" name="expected_run" value="{{ c.send_run }}">
+      <input type="hidden" name="expected_count" value="{{ failed_last }}">
+      <label class="check"><input type="checkbox" name="confirm" value="ja" required data-testid="mail-resend-confirm">
+        Nur die {{ failed_last }} in Lauf {{ c.send_run }} fehlgeschlagenen Empfänger erneut anschreiben (gleiche Systeme, aktueller Text).</label>
+      <p><button type="submit" class="btn" data-testid="mail-resend-failed">Nur fehlgeschlagene erneut senden ({{ failed_last }})</button></p>
+    </form>
+    {% endif %}
+    {% if c.send_run %}<p class="hint">Ein erneuter Versand ist immer ein neuer, ausdrücklich bestätigter Lauf; bereits versandte Mails eines Laufs werden nie doppelt gesendet.</p>{% endif %}
+  {% endif %}
+</section>
+
+{% if runs %}
+<section class="card" data-testid="mail-status"{% if status and status.active %} data-status-url="{{ status_url }}"{% endif %}>
+  <h2>Versandstatus</h2>
+  <p>Läufe: {% for r in runs %}<a href="/admin/projekte/{{ p.id }}/mail/{{ c.id }}?lauf={{ r.send_run }}"{% if r.send_run == shown_run %} aria-current="page"{% endif %} data-testid="mail-run-{{ r.send_run }}">Lauf {{ r.send_run }}</a>
+    ({{ r.started_at | dt }}, {{ "nur fehlgeschlagene" if r.mode == "nur_fehlgeschlagene" else "alle" }}, {{ r.recipient_count }} Empfänger{% if r.cancelled_at %}, abgebrochen{% endif %}){% if not loop.last %} · {% endif %}{% endfor %}</p>
+  {% if status %}
+  <p class="mail-counts" data-testid="mail-counts">
+    {% for k, v in status.counts.items() %}<span class="mail-count mail-st-{{ k }}">{{ labels.MAIL_DELIVERY_STATUS[k] }}: <strong data-count="{{ k }}" data-testid="mail-count-{{ k }}">{{ v }}</strong></span>{% endfor %}
+    <span class="hint" id="mail-status-live"{% if not status.active %} hidden{% endif %}>– aktualisiert sich automatisch</span>
+  </p>
+  <table class="tbl" data-testid="mail-deliveries">
+    <thead><tr><th>Empfänger</th><th>Systeme</th><th>Status</th><th>Versuche</th><th>Gesendet</th><th>Fehler</th></tr></thead>
+    <tbody>
+    {% for d in status.deliveries %}
+      <tr data-delivery-id="{{ d.id }}" data-testid="mail-delivery-{{ d.email_norm }}"><td>{{ d.email_norm }}</td><td>{{ d.system_ids | length }}</td>
+        <td class="mail-st-{{ d.status }}" data-field="status">{{ labels.MAIL_DELIVERY_STATUS[d.status] }}</td>
+        <td data-field="attempts">{{ d.attempts }}</td><td data-field="sent_at">{{ d.sent_at | dt }}</td><td data-field="error">{{ d.last_error or "" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Kampagne löschen</h2>
+  <form method="post" action="/admin/projekte/{{ p.id }}/mail/{{ c.id }}/loeschen" class="inline" data-confirm="Kampagne samt Versandprotokoll löschen?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn btn-danger" data-testid="mail-delete">Kampagne löschen</button>
+  </form>
+  <p class="hint">Die Audit-Einträge zur Kampagne bleiben erhalten.</p>
+</section>
+{% endif %}
+{% endblock %}

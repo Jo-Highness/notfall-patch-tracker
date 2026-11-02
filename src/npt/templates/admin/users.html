@@ -1,0 +1,94 @@
+{% extends "admin/layout.html" %}
+{% block title %}Admin-Benutzer – Notfall-Patch-Tracker{% endblock %}
+{% block content %}
+<h1>Admin-Benutzer</h1>
+<p class="hint">Identifikation über: <strong>{{ id_kind_label }}</strong>
+  (<code>ADMIN_CERT_ID_ATTRIBUTE</code>). Einträge anderer Art sind wirkungslos und grau dargestellt.</p>
+
+<section class="card">
+  <h2>Offene Freischaltungsanfragen</h2>
+  {% if requests %}
+  <table class="tbl">
+    <thead><tr><th>Angefragt</th><th>Identifier</th><th>Subject-DN</th><th>Aussteller</th><th>Aktion</th></tr></thead>
+    <tbody>
+    {% for r in requests %}
+      <tr>
+        <td>{{ r.requested_at | dt }}</td>
+        <td><code>{{ r.identifier_norm }}</code></td>
+        <td>{{ r.subject_dn }}</td>
+        <td>{{ r.issuer_dn }}</td>
+        <td class="actions">
+          <form method="post" action="/admin/anfragen/{{ r.id }}/bestaetigen" data-confirm="Zugang für diesen Identifier freischalten?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-primary">Bestätigen</button>
+          </form>
+          <form method="post" action="/admin/anfragen/{{ r.id }}/ablehnen">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn">Ablehnen</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="hint">Keine offenen Anfragen.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Admins</h2>
+  <table class="tbl">
+    <thead><tr><th>Identifier</th><th>Art</th><th>Aussteller</th><th>Name</th><th>Status</th><th>Angelegt</th><th>Aktion</th></tr></thead>
+    <tbody>
+    {% for a in admins %}
+      <tr class="{% if not a.active or a.id_kind != active_kind %}inactive{% endif %}">
+        <td><code>{{ a.identifier_norm }}</code>{% if a.id == admin.id %} <span class="tag">Sie</span>{% endif %}</td>
+        <td>{{ labels.ID_KIND.get(a.id_kind, a.id_kind) }}</td>
+        <td>{% if a.issuer_norm == "*" %}beliebig (konfigurierte CA){% else %}<code>{{ a.issuer_norm }}</code>{% endif %}</td>
+        <td>{{ a.display_name or "" }}</td>
+        <td>{{ "aktiv" if a.active else "deaktiviert" }}</td>
+        <td>{{ a.created_at | dt }}<br><small>von {{ a.created_by }}</small></td>
+        <td class="actions">
+          {% if a.active %}
+          <form method="post" action="/admin/benutzer/{{ a.id }}/deaktivieren" data-confirm="Admin deaktivieren?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn">Deaktivieren</button>
+          </form>
+          {% else %}
+          <form method="post" action="/admin/benutzer/{{ a.id }}/aktivieren">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn">Aktivieren</button>
+          </form>
+          {% endif %}
+          <form method="post" action="/admin/benutzer/{{ a.id }}/entfernen" data-confirm="Admin endgültig entfernen?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-danger">Entfernen</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Admin hinzufügen</h2>
+  <form method="post" action="/admin/benutzer/neu" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Identifier ({{ id_kind_label }})
+      <input type="text" name="identifier" required maxlength="4096" autocomplete="off"
+             placeholder="{% if active_kind == 'subject_dn' %}CN=Max Muster,OU=IT,O=Firma,C=DE{% elif active_kind == 'fingerprint_sha256' %}64 Hex-Zeichen{% else %}name@firma.de{% endif %}">
+    </label>
+    <label>Aussteller-DN (optional, leer = jeder Aussteller der konfigurierten CA)
+      <input type="text" name="issuer" maxlength="4096" autocomplete="off">
+    </label>
+    <label>Anzeigename (optional)
+      <input type="text" name="display_name" maxlength="200" autocomplete="off">
+    </label>
+    <button type="submit" class="btn btn-primary">Hinzufügen</button>
+  </form>
+  <p class="hint">Den Identifier eines Zertifikats ermitteln: <code>openssl x509 -in cert.pem -noout -subject -nameopt RFC2253</code>.
+    Reihenfolge, Leerzeichen und Groß-/Kleinschreibung im DN spielen keine Rolle.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "admin/layout.html" %}
+{% block title %}{{ system.system_id }} – {{ p.name }}{% endblock %}
+{% block content %}
+<p><a href="/admin/projekte/{{ p.id }}">← {{ p.name }}</a></p>
+<h1>Stammdaten bearbeiten: {{ system.system_id }}</h1>
+<p class="hint">Herkunft: {{ labels.ORIGIN.get(system.origin, system.origin) }} · Version {{ system.version }}.
+  Änderungen wirken nur in diesem Projekt (nicht in den globalen Stammdaten) und werden im Änderungsprotokoll mit Ihrem Identifier vermerkt.
+  {% if p.status != "aktiv" %}<strong>Das Projekt ist {{ labels.PROJECT_STATUS[p.status] }} – Speichern ist nicht möglich.</strong>{% endif %}</p>
+<form method="post" action="/admin/projekte/{{ p.id }}/system" class="form" data-testid="system-edit-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="sid" value="{{ system.system_id }}">
+  <input type="hidden" name="version" value="{{ system.version }}">
+  {% for name in fields.MASTER_DATA_FIELDS %}
+  <label>{{ fields.DISPLAY_NAMES[name] }}
+    {% if name == "system_description" %}
+    <textarea name="{{ name }}" maxlength="{{ fields.MASTER_FIELD_MAX[name] }}" rows="3" data-testid="edit-{{ name }}">{{ values[name] or "" }}</textarea>
+    {% else %}
+    <input type="text" name="{{ name }}" value="{{ values[name] or '' }}" maxlength="{{ fields.MASTER_FIELD_MAX[name] }}" autocomplete="off" data-testid="edit-{{ name }}">
+    {% endif %}
+    {% if errors.get(name) %}<span class="field-error">{{ errors[name] }}</span>{% endif %}
+  </label>
+  {% endfor %}
+  <button type="submit" class="btn btn-primary" data-testid="system-save" {% if p.status != "aktiv" %}disabled{% endif %}>Speichern</button>
+</form>
+{% endblock %}

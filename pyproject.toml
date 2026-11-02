@@ -1,0 +1,98 @@
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "notfall-patch-tracker"
+version = "0.1.0"
+description = "Notfall-Patch-Tracker: Betroffenheitspruefung aller Anwendungen bei kritischen Schwachstellen"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+# SPDX-Lizenzausdruck nach PEP 639 (hatchling >= 1.27); Hinweise zu Drittkomponenten in
+# THIRD_PARTY_NOTICES.md, beide landen als License-File im Paket (.dist-info/licenses).
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+# Direkte Abhaengigkeiten exakt gepinnt (Auftrag 8.2); transitive Pins stehen in
+# requirements.lock (wird im Dockerfile als Constraint genutzt).
+dependencies = [
+    "fastapi==0.162.0",
+    "starlette==1.10.0",
+    "uvicorn[standard]==0.54.0",
+    "uvicorn-worker==0.4.0",
+    "gunicorn==26.2.0",
+    "sqlalchemy==2.1.6",
+    "alembic==1.20.1",
+    "psycopg[binary]==3.3.6",
+    "pydantic==2.14.1",
+    "pydantic-settings==2.16.1",
+    "jinja2==3.1.6",
+    "cryptography==50.0.2",
+    "python-multipart==0.0.32",
+    "openpyxl==3.1.5",
+    "nh3==0.3.7",
+    "markdown-it-py==4.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "httpx==0.28.1",
+    "ruff==0.17.2",
+    "mypy==2.4.0",
+    "types-openpyxl==3.1.5.20261017",
+]
+
+[project.scripts]
+npt-run = "npt.run:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/npt"]
+
+# Handbuecher: eine Quelle im Repo (docs/handbuch), im Paket als npt/handbuch (11.2).
+[tool.hatch.build.targets.wheel.force-include]
+"docs/handbuch" = "npt/handbuch"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "N", "C4", "PT", "PL"]
+ignore = [
+    "PLR0913",  # viele Parameter in FastAPI-Routen sind normal
+    "PLR2004",  # magische Zahlen in Grenzwert-Tabellen sind gewollt
+    "RUF001", "RUF002", "RUF003",  # deutsche Typografie in Texten
+    "S104",     # Bindung an 0.0.0.0 ist im Container gewollt
+    "PLC0415",  # bewusst spaete Importe (Prozessgrenzen, public importiert kein admin)
+    "PLR0917",  # positionale Parameter in internen Helfern
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S108", "PLR0915", "S603", "S607"]
+"src/npt/migrations/**" = ["E501"]
+"scripts/**" = ["S311", "S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+files = ["src", "tests"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "conftest"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+module = ["gunicorn.*", "uvicorn_worker.*", "playwright.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = [
+    "error::DeprecationWarning:npt.*",
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]

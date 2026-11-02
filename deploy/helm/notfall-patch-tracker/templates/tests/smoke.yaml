@@ -1,0 +1,54 @@
+{{- if .Values.tests.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "npt.fullname" . }}-smoke
+  labels:
+    {{- include "npt.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  securityContext:
+    {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  containers:
+    - name: smoke
+      image: {{ include "npt.image" (dict "root" . "kind" "app") }}
+      imagePullPolicy: {{ .Values.image.app.pullPolicy }}
+      env:
+        - name: PUBLIC_URL
+          value: http://{{ include "npt.fullname" . }}-public:8000/healthz
+        - name: ADMIN_HOST
+          value: {{ include "npt.fullname" . }}-admin
+        - name: ADMIN_PORT
+          value: {{ .Values.admin.service.port | quote }}
+      command:
+        - python
+        - -c
+        - |
+          import http.client, os, ssl, sys, urllib.request
+          st = urllib.request.urlopen(os.environ["PUBLIC_URL"], timeout=10).status
+          print("public /healthz:", st)
+          # Ohne Client-Zertifikat muss das Gateway 403 liefern (mTLS, K3).
+          ctx = ssl.create_default_context()
+          ctx.check_hostname = False
+          ctx.verify_mode = ssl.CERT_NONE
+          c = http.client.HTTPSConnection(os.environ["ADMIN_HOST"], int(os.environ["ADMIN_PORT"]), context=ctx, timeout=10)
+          c.request("GET", "/admin/")
+          gw = c.getresponse().status
+          print("gateway /admin/ ohne Zertifikat:", gw)
+          sys.exit(0 if st == 200 and gw == 403 else 1)
+      securityContext:
+        {{- toYaml .Values.securityContext.app | nindent 8 }}
+      resources:
+        requests: { cpu: 10m, memory: 32Mi }
+        limits: { memory: 128Mi }
+{{- end }}

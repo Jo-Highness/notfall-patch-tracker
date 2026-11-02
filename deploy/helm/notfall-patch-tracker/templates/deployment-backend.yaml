@@ -1,0 +1,217 @@
+{{- $b := .Values.backend -}}
+{{- $a := .Values.admin -}}
+{{- /* Mesh-Injektion bleibt aus: der Admin-Port vertraut 127.0.0.1 (K3); hat Vorrang vor podAnnotations. */}}
+{{- $annotations := merge (dict "sidecar.istio.io/inject" "false" "linkerd.io/inject" "disabled" "checksum/config" (include (print $.Template.BasePath "/configmap.yaml") . | sha256sum)) $b.podAnnotations -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "npt.fullname" . }}-backend
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  # Genau eine Instanz (Backup-Dateien auf RWO-Volume, K1); Recreate statt Rolling.
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "npt.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "npt.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+      annotations:
+        {{- toYaml $annotations | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "npt.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # Nur app + Gateway im Pod; keine fremden Container (extraContainers gibt es bewusst nicht).
+      shareProcessNamespace: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ $b.terminationGracePeriodSeconds }}
+      initContainers:
+        {{- include "npt.migrateInitContainer" . | nindent 8 }}
+      containers:
+        - name: app
+          image: {{ include "npt.image" (dict "root" . "kind" "app") }}
+          imagePullPolicy: {{ .Values.image.app.pullPolicy }}
+          envFrom:
+            {{- include "npt.appEnvFrom" . | nindent 12 }}
+          env:
+            - name: APP_ROLE
+              value: admin,jobs
+            - name: ADMIN_WORKERS
+              value: {{ $b.adminWorkers | quote }}
+            - name: NPT_SKIP_MIGRATE
+              value: "1"
+            - name: JOBS_HEARTBEAT_FILE
+              value: /tmp/npt-jobs-heartbeat
+            {{- include "npt.appEnv" . | nindent 12 }}
+          startupProbe:
+            exec: { command: ["python", "-m", "npt.probe"] }
+            periodSeconds: 5
+            failureThreshold: 36
+            timeoutSeconds: 5
+          readinessProbe:
+            exec: { command: ["python", "-m", "npt.probe"] }
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+          livenessProbe:
+            exec: { command: ["python", "-m", "npt.probe"] }
+            periodSeconds: 20
+            failureThreshold: 3
+            timeoutSeconds: 5
+          securityContext:
+            {{- toYaml .Values.securityContext.app | nindent 12 }}
+          resources:
+            {{- toYaml $b.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: backups
+              mountPath: /data/backups
+            {{- include "npt.dbTlsMount" . | nindent 12 }}
+        - name: gateway
+          image: {{ include "npt.image" (dict "root" . "kind" "gateway") }}
+          imagePullPolicy: {{ .Values.image.gateway.pullPolicy }}
+          env:
+            - name: GATEWAY_TLS_CERT_PATH
+              value: /etc/npt-gateway/tls/{{ $a.tls.certKey }}
+            - name: GATEWAY_TLS_KEY_PATH
+              value: /etc/npt-gateway/tls/{{ $a.tls.keyKey }}
+            - name: ADMIN_CA_BUNDLE_PATH
+              value: /etc/npt-gateway/client-ca/{{ $a.clientCa.key }}
+            - name: ADMIN_CRL_PATH
+              value: {{ if $a.crl.enabled }}/etc/npt-gateway/crl/{{ $a.crl.key }}{{ else }}""{{ end }}
+            - name: ADMIN_VERIFY_DEPTH
+              value: {{ $b.gateway.verifyDepth | quote }}
+            - name: ADMIN_UPSTREAM
+              value: 127.0.0.1:8001
+            - name: UPLOAD_MAX_MB
+              value: {{ .Values.config.uploadMaxMb | quote }}
+            - name: CRL_RELOAD_INTERVAL
+              value: {{ $b.gateway.crlReloadIntervalS | quote }}
+            - name: GATEWAY_WORKER_PROCESSES
+              value: {{ $b.gateway.workerProcesses | quote }}
+          ports:
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+          readinessProbe:
+            exec: { command: ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/gw-health"] }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec: { command: ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/gw-health"] }
+            periodSeconds: 15
+            failureThreshold: 3
+            timeoutSeconds: 5
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
+          securityContext:
+            {{- toYaml .Values.securityContext.gateway | nindent 12 }}
+          resources:
+            {{- toYaml $b.gateway.resources | nindent 12 }}
+          # Verzeichnis-Mounts ohne subPath: ersetzte Secret-/ConfigMap-Inhalte werden
+          # sichtbar und von der Reload-Schleife ohne Neustart geladen (K3).
+          volumeMounts:
+            - name: gw-tls
+              mountPath: /etc/npt-gateway/tls
+              readOnly: true
+            - name: gw-client-ca
+              mountPath: /etc/npt-gateway/client-ca
+              readOnly: true
+            {{- if $a.crl.enabled }}
+            - name: gw-crl
+              mountPath: /etc/npt-gateway/crl
+              readOnly: true
+            {{- end }}
+            - name: gw-conf
+              mountPath: /etc/nginx/conf.d
+            - name: gw-run
+              mountPath: /run/nginx
+            - name: gw-cache
+              mountPath: /var/cache/nginx
+            - name: gw-tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }
+        - name: backups
+          {{- if not $b.persistence.enabled }}
+          emptyDir: {}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-backups" (include "npt.fullname" .)) $b.persistence.existingClaim }}
+          {{- end }}
+        - name: gw-tls
+          secret:
+            secretName: {{ $a.tls.secretName }}
+            defaultMode: 0440
+            items:
+              - { key: {{ $a.tls.certKey | quote }}, path: {{ $a.tls.certKey | quote }} }
+              - { key: {{ $a.tls.keyKey | quote }}, path: {{ $a.tls.keyKey | quote }} }
+        - name: gw-client-ca
+          {{- if $a.clientCa.secretName }}
+          secret:
+            secretName: {{ $a.clientCa.secretName }}
+            defaultMode: 0444
+            items:
+              - { key: {{ $a.clientCa.key | quote }}, path: {{ $a.clientCa.key | quote }} }
+          {{- else }}
+          configMap:
+            name: {{ $a.clientCa.configMapName }}
+            defaultMode: 0444
+            items:
+              - { key: {{ $a.clientCa.key | quote }}, path: {{ $a.clientCa.key | quote }} }
+          {{- end }}
+        {{- if $a.crl.enabled }}
+        - name: gw-crl
+          {{- if $a.crl.secretName }}
+          secret:
+            secretName: {{ $a.crl.secretName }}
+            defaultMode: 0444
+            items:
+              - { key: {{ $a.crl.key | quote }}, path: {{ $a.crl.key | quote }} }
+          {{- else }}
+          configMap:
+            name: {{ $a.crl.configMapName }}
+            defaultMode: 0444
+            items:
+              - { key: {{ $a.crl.key | quote }}, path: {{ $a.crl.key | quote }} }
+          {{- end }}
+        {{- end }}
+        - name: gw-conf
+          emptyDir: { medium: Memory, sizeLimit: 1Mi }
+        - name: gw-run
+          emptyDir: { medium: Memory, sizeLimit: 1Mi }
+        - name: gw-cache
+          emptyDir: { sizeLimit: 64Mi }
+        - name: gw-tmp
+          emptyDir: { medium: Memory, sizeLimit: 8Mi }
+        {{- include "npt.dbTlsVolume" . | nindent 8 }}
+      {{- with $b.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $b.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $b.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

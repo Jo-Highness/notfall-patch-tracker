@@ -1,0 +1,82 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $np := .Values.networkPolicy -}}
+{{- $sel := include "npt.selectorLabels" . -}}
+# Default-Deny fuer alle Pods dieses Releases (ausser dem helm-test-Pod).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "npt.fullname" . }}-default-deny
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- $sel | nindent 6 }}
+    matchExpressions:
+      - { key: app.kubernetes.io/component, operator: NotIn, values: [test] }
+  policyTypes: [Ingress, Egress]
+---
+# public: 8000 nur vom Ingress-/Gateway-Controller (XFF wird nur von dort vertraut, K4).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "npt.fullname" . }}-public
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public
+spec:
+  podSelector:
+    matchLabels:
+      {{- $sel | nindent 6 }}
+      app.kubernetes.io/component: public
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- include "npt.npPeers" (dict "cidrs" (list) "namespaceSelector" $np.ingressController.namespaceSelector "podSelector" $np.ingressController.podSelector) | nindent 8 }}
+        - podSelector:
+            matchLabels:
+              {{- $sel | nindent 14 }}
+              app.kubernetes.io/component: test
+      ports:
+        - { protocol: TCP, port: 8000 }
+  egress:
+    {{- include "npt.npEgressCommon" . | nindent 4 }}
+---
+# backend: 8443 (Gateway) aus adminSourceCIDRs; App-Admin-Port 8001 nur loopback.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "npt.fullname" . }}-backend
+  labels:
+    {{- include "npt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  podSelector:
+    matchLabels:
+      {{- $sel | nindent 6 }}
+      app.kubernetes.io/component: backend
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- range $np.adminSourceCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+        {{- with $np.adminIngressFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        - podSelector:
+            matchLabels:
+              {{- $sel | nindent 14 }}
+              app.kubernetes.io/component: test
+      ports:
+        - { protocol: TCP, port: 8443 }
+  egress:
+    {{- include "npt.npEgressCommon" . | nindent 4 }}
+    {{- if .Values.config.smtp.host }}
+    {{- include "npt.npEgressRule" (dict "port" $np.smtp.port "peers" (dict "cidrs" $np.smtp.cidrs)) | nindent 4 }}
+    {{- end }}
+    {{- if .Values.config.masterApi.enabled }}
+    {{- include "npt.npEgressRule" (dict "port" $np.masterApi.port "peers" (dict "cidrs" $np.masterApi.cidrs)) | nindent 4 }}
+    {{- end }}
+{{- end }}

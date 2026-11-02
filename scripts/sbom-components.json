@@ -1,0 +1,66 @@
+{
+  "_hinweis": "Ergaenzungen fuer die SBOM (scripts/sbom.sh, J15). 'vendored': Browser-Bibliotheken unter src/npt/static/vendor, die Syft in minifizierten Dateien ohne package.json nicht erkennt; Quelle der Angaben sind die VERSION-/LICENSE-Dateien im jeweiligen Verzeichnis. Bei einem Update beide Stellen anpassen - scripts/sbom_finalize.py bricht ab, wenn Version oder Pruefsummen nicht zur VERSION-Datei passen. 'license_overrides': SPDX-Lizenz fuer Pakete, deren Metadaten Syft nicht auswerten kann (nur Klassifikator), geprueft mit scripts/check-licenses.sh; gilt nur, wenn die Komponente sonst keine Lizenz hat.",
+  "vendored": [
+    {
+      "dir": "src/npt/static/vendor/tabulator",
+      "name": "tabulator-tables",
+      "version": "6.7.1",
+      "license": "MIT",
+      "purl": "pkg:npm/tabulator-tables@6.7.1",
+      "homepage": "https://tabulator.info",
+      "vcs": "https://github.com/olifolkerd/tabulator",
+      "npm_integrity_sha512": "6CMy17XdemQaIdg1BOqD5K6nzF2xoD47eRNiBYJBK+QrLWji7sgukyPjKXYrjRdWLwbGENdUsiAYJrNS3XeUfw==",
+      "files": [
+        "tabulator.min.js",
+        "tabulator.min.css"
+      ],
+      "bundled": []
+    },
+    {
+      "dir": "src/npt/static/vendor/quill",
+      "name": "quill",
+      "version": "2.0.3",
+      "license": "BSD-3-Clause",
+      "purl": "pkg:npm/quill@2.0.3",
+      "homepage": "https://quilljs.com",
+      "vcs": "https://github.com/slab/quill",
+      "npm_integrity_sha512": "xEYQBqfYx/sfb33VJiKnSJp8ehloavImQ2A6564GAbqG55PGw1dAWUn1MUbQB62t0azawUS2CZZhWCjO8gRvTw==",
+      "files": [
+        "quill.min.js",
+        "quill.snow.css"
+      ],
+      "bundled": [
+        {
+          "name": "parchment",
+          "version": "3.0.0",
+          "range": "^3.0.0",
+          "license": "BSD-3-Clause"
+        },
+        {
+          "name": "quill-delta",
+          "version": "5.1.0",
+          "range": "^5.1.0",
+          "license": "MIT"
+        },
+        {
+          "name": "eventemitter3",
+          "version": "5.0.1",
+          "range": "^5.0.1",
+          "license": "MIT"
+        },
+        {
+          "name": "lodash-es",
+          "version": "4.17.21",
+          "range": "^4.17.21",
+          "license": "MIT"
+        }
+      ]
+    }
+  ],
+  "license_overrides": {
+    "pkg:pypi/jinja2": "BSD-3-Clause",
+    "pkg:pypi/markdown-it-py": "MIT",
+    "pkg:generic/python": "PSF-2.0"
+  },
+  "_hinweis_bundled": "Gebuendelte Pakete: Version = neueste zum deklarierten Bereich passende Version am Veroeffentlichungstag des Elternpakets (quill 2.0.3: 2024-11-30, npm-Registry-Zeitstempel); aus dem Distributions-Build selbst nicht ablesbar. Bereich steht als Property npt:version-range in der SBOM."
+}

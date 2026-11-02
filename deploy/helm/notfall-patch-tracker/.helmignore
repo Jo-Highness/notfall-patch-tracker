@@ -1,0 +1,6 @@
+# Nicht ins Chart-Paket
+.git/
+*.swp
+*.bak
+*.tmp
+*.orig

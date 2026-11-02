@@ -1,0 +1,157 @@
+/* Notfall-Patch-Tracker – Grundlayout (keine Inline-Styles, CSP style-src 'self'). */
+:root { --fg: #1d2330; --muted: #5b6475; --bg: #f5f6f8; --card: #fff; --line: #d9dde4;
+        --primary: #0b5cad; --danger: #b3261e; --ok: #1e7b34; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--fg); background: var(--bg); }
+.topbar { display: flex; gap: 1.5rem; align-items: center; padding: .6rem 1.2rem; background: #1d2330; color: #fff; }
+.topbar a { color: #dfe7f5; text-decoration: none; margin-right: 1rem; }
+.topbar a:hover { text-decoration: underline; }
+.brand { font-weight: 600; }
+.nav { flex: 1; }
+.whoami { font-size: .85rem; color: #c5cede; }
+.content { max-width: 1200px; margin: 1.2rem auto; padding: 0 1.2rem; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 1rem 1.2rem; margin: 1rem 0; }
+h1 { font-size: 1.5rem; } h2 { font-size: 1.15rem; margin-top: 0; }
+.hint { color: var(--muted); font-size: .9rem; }
+code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; word-break: break-all; }
+.tbl { width: 100%; border-collapse: collapse; background: var(--card); }
+.tbl th, .tbl td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.tbl tr.inactive { color: var(--muted); }
+.actions form { display: inline-block; margin: 0 .25rem .25rem 0; }
+.btn { border: 1px solid var(--line); background: #fff; padding: .3rem .7rem; border-radius: 4px; cursor: pointer; font: inherit; }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn-danger { color: var(--danger); border-color: var(--danger); }
+.form label { display: block; margin-bottom: .7rem; }
+.form input[type=text] { display: block; width: 100%; max-width: 640px; padding: .35rem .5rem; border: 1px solid var(--line); border-radius: 4px; font: inherit; }
+.msg { padding: .6rem .8rem; border-radius: 4px; }
+.msg-ok { background: #e6f4ea; color: var(--ok); }
+.msg-err { background: #fdecea; color: var(--danger); }
+.tag { display: inline-block; font-size: .75rem; padding: 0 .35rem; border-radius: 3px; background: #e3ecf9; color: var(--primary); }
+.facts dt { font-weight: 600; margin-top: .6rem; } .facts dd { margin: .1rem 0 0 0; }
+.summary { display: flex; flex-wrap: wrap; gap: 1.5rem; }
+.kpi strong { font-size: 1.3rem; margin-right: .25rem; }
+.check { display: inline-block; margin: .4rem 0; }
+td.old { color: var(--danger); } td.new { color: var(--ok); }
+details > summary { cursor: pointer; margin-bottom: .5rem; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+/* --- Hauptliste (Phase 3) --- */
+.content-wide { max-width: none; margin: .6rem 0; padding: 0 .8rem; }
+.project-name { font-weight: 600; margin-right: 1.2rem; color: #fff; }
+.help-link { font-weight: 600; }
+.topbar a.help-link { background: #f2c94c; color: #1d2330; padding: .15rem .7rem; border-radius: 12px; }
+.topbar a.help-link:hover, .topbar a.help-link[aria-current="page"] { background: #ffe08a; }
+/* --- Handbuch (Phase 9) --- */
+.handbook { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .6rem 1.6rem 1.2rem; max-width: 60rem; }
+.handbook h2 { margin-top: 1.4rem; padding-top: .6rem; border-top: 1px solid var(--line); }
+.handbook h3 { font-size: 1rem; margin-bottom: .3rem; }
+.handbook table { border-collapse: collapse; margin: .6rem 0; }
+.handbook th, .handbook td { text-align: left; padding: .3rem .6rem; border: 1px solid var(--line); vertical-align: top; }
+.handbook pre { background: #f0f2f5; padding: .6rem .8rem; border-radius: 4px; overflow-x: auto; }
+.handbook pre code { word-break: normal; white-space: pre; }
+.handbook blockquote { margin: .6rem 0; padding: .3rem .9rem; border-left: 4px solid #f2c94c; background: #fffbea; }
+.toolbar { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin-bottom: .5rem; }
+.toolbar .spacer { flex: 1; }
+.toolbar .search input { padding: .3rem .5rem; border: 1px solid var(--line); border-radius: 4px; font: inherit; min-width: 18rem; margin-left: .3rem; }
+.toolbar a.btn { text-decoration: none; color: inherit; }
+.toolbar a.btn-primary, .toolbar .btn-primary { color: #fff; }
+.counter { color: var(--muted); font-size: .9rem; }
+.status-line { min-height: 1.3rem; font-size: .85rem; color: var(--muted); margin-bottom: .3rem; }
+.status-ok { color: var(--ok); } .status-error { color: var(--danger); } .status-warn { color: #8a5a00; }
+.prefilters { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-bottom: .4rem; font-size: .9rem; }
+.chip { background: #e3ecf9; color: var(--primary); border-radius: 12px; padding: .1rem .3rem .1rem .6rem; }
+.chip-remove { border: 0; background: transparent; color: var(--primary); cursor: pointer; font-size: 1rem; line-height: 1; }
+#grid { background: #fff; border: 1px solid var(--line); }
+/* Zeilen abwechselnd einfärben (Tabulator-Standard #efefef ist kaum sichtbar) */
+#grid .tabulator-row.tabulator-row-odd { background: #fff; }
+#grid .tabulator-row.tabulator-row-even { background: #eef2f8; }
+#grid .tabulator-row:hover { background: #dde6f3; }
+/* Bearbeitbare Spalten: gelb hinterlegt, Kopf mit Stift-Symbol, leere Pflichtangaben mit Hinweis */
+#grid .tabulator-col.editable { background: #f6d77a; }
+#grid .tabulator-col.editable .tabulator-col-title::before { content: "✎ "; }
+#grid .tabulator-cell.editable { background: #fff4cc; border-left: 1px solid #e6c65a; cursor: pointer; }
+#grid .tabulator-row-even .tabulator-cell.editable { background: #fbe9a8; }
+#grid .tabulator-row:hover .tabulator-cell.editable { background: #f9df85; }
+#grid .editable-affected > span:empty::after,
+#grid .editable-action_taken > span:empty::after { content: "bitte ausfüllen"; color: #8a5a00; font-style: italic; }
+#grid.is-readonly .tabulator-col.editable,
+#grid.is-readonly .tabulator-cell.editable { background: transparent; border-left: 0; cursor: default; }
+#grid.is-readonly .tabulator-col.editable .tabulator-col-title::before,
+#grid.is-readonly .tabulator-cell.editable > span:empty::after { content: none; }
+.edit-legend { font-size: .85rem; color: var(--muted); margin: 0 0 .3rem; }
+.edit-legend .swatch { display: inline-block; width: 1.6rem; height: .9rem; vertical-align: middle; background: #fff4cc; border: 1px solid #e6c65a; margin-right: .3rem; }
+#grid .tabulator-cell.cell-saving { box-shadow: inset 0 0 0 2px #c9a227; }
+#grid .tabulator-cell.cell-saved { box-shadow: inset 0 0 0 2px var(--ok); }
+#grid .tabulator-cell.cell-error { box-shadow: inset 0 0 0 2px var(--danger); }
+#grid .multiline { white-space: pre-wrap; }
+dialog { border: 1px solid var(--line); border-radius: 6px; padding: 1rem 1.2rem; max-width: 52rem; width: 92vw; }
+dialog::backdrop { background: rgba(20, 25, 35, .45); }
+.dialog-actions { display: flex; gap: .6rem; justify-content: flex-end; margin-top: 1rem; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .4rem 1rem; }
+.form-grid label { display: block; font-size: .9rem; }
+.form-grid .wide { grid-column: 1 / -1; }
+.form-grid input, .form-grid select, .form-grid textarea { display: block; width: 100%; padding: .3rem .45rem; border: 1px solid var(--line); border-radius: 4px; font: inherit; }
+.field-error { display: block; color: var(--danger); font-size: .8rem; min-height: 1rem; }
+/* --- Live-Updates (Phase 4) --- */
+.live-status { font-size: .8rem; padding: .05rem .5rem; border-radius: 10px; background: #3a4357; color: #dfe7f5; margin-left: .5rem; }
+.live-status::before { content: "●"; margin-right: .3rem; }
+.live-live::before { color: #5fd17a; }
+.live-connecting::before, .live-polling::before { color: #f0c541; }
+.live-offline::before, .live-gone::before { color: #ff7b72; }
+.status-row { display: flex; gap: .6rem; align-items: center; }
+.status-row .status-line { flex: 1; }
+.btn-small { padding: .1rem .5rem; font-size: .85rem; }
+.live-hint { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; background: #fff4d6; border: 1px solid #e2b93b; border-radius: 4px; padding: .35rem .6rem; margin-bottom: .4rem; font-size: .9rem; }
+.live-hint[hidden], #refresh-view[hidden], #live-banner[hidden] { display: none; }
+@keyframes npt-flash { from { background-color: #ffe08a; } to { background-color: transparent; } }
+#grid .tabulator-cell.cell-flash { animation: npt-flash 1.6s ease-out; }
+#grid .tabulator-row.row-flash .tabulator-cell { animation: npt-flash 2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  #grid .tabulator-cell.cell-flash, #grid .tabulator-row.row-flash .tabulator-cell { animation: none; outline: 2px solid #e2b93b; outline-offset: -2px; }
+}
+/* --- Admin Projekte --- */
+progress.progress { width: 8rem; vertical-align: middle; }
+.copy-row { display: flex; gap: .5rem; align-items: center; }
+.copy-row input { flex: 1; padding: .35rem .5rem; border: 1px solid var(--line); border-radius: 4px; font: inherit; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; }
+.form textarea { display: block; width: 100%; max-width: 640px; padding: .35rem .5rem; border: 1px solid var(--line); border-radius: 4px; font: inherit; }
+.status-aktiv { color: var(--ok); } .status-abgeschlossen { color: #8a5a00; } .status-archiviert { color: var(--muted); }
+.inline { display: inline-block; margin-right: .4rem; } .inline-form { display: flex; gap: .6rem; align-items: flex-end; } .inline-form label { margin-bottom: 0; }
+/* --- Übersicht/Pivot (Phase 5) --- */
+.nav a[aria-current="page"] { text-decoration: underline; font-weight: 600; }
+.kpis { display: flex; flex-wrap: wrap; gap: 1rem; margin: .5rem 0 1rem; }
+.kpi-card { display: flex; flex-direction: column; min-width: 14rem; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .7rem 1rem; color: inherit; text-decoration: none; }
+.kpi-card:hover { border-color: var(--primary); }
+.kpi-value { font-size: 1.6rem; font-weight: 600; color: var(--primary); }
+.kpi-label { color: var(--muted); font-size: .9rem; }
+.pivot-wrap { overflow-x: auto; }
+.pivot { width: auto; min-width: 40rem; }
+.pivot th, .pivot td { padding: .35rem .7rem; }
+.pivot .num { text-align: right; font-variant-numeric: tabular-nums; }
+.pivot td a, .pivot th a { display: block; color: var(--primary); text-decoration: none; }
+.pivot td a:hover, .pivot th a:hover { text-decoration: underline; }
+.pivot .zero a { color: var(--muted); }
+.pivot .sum { font-weight: 600; background: #f0f3f8; }
+.pivot tfoot th, .pivot tfoot td { border-top: 2px solid var(--line); }
+.pivot td.changed { animation: npt-flash 1.6s ease-out; }
+@media (prefers-reduced-motion: reduce) { .pivot td.changed { animation: none; outline: 2px solid #e2b93b; outline-offset: -2px; } }
+/* --- Projekt-Upload, Änderungsprotokoll, Backups (Phase 6/7) --- */
+.notice { background: #fff4d6; border: 1px solid #e2b93b; border-radius: 4px; padding: .5rem .7rem; margin: .6rem 0; }
+.filter-form { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: flex-end; }
+.filter-form label { margin-bottom: 0; }
+.form select, .form input[type=date], .form input[type=number] { display: block; padding: .3rem .45rem; border: 1px solid var(--line); border-radius: 4px; font: inherit; }
+.filter-form input[type=text] { min-width: 14rem; }
+.pager { display: flex; gap: 1rem; align-items: center; margin: .8rem 0; }
+a.btn { text-decoration: none; color: inherit; display: inline-block; }
+.tbl td .hint { font-size: .8rem; }
+/* Mailversand (Phase 8) */
+.mail-editor { max-width: 900px; margin-bottom: .4rem; background: #fff; }
+.mail-editor .ql-container { min-height: 14rem; font: inherit; }
+#mail-body { max-width: 900px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; }
+.mail-selectors { border: 1px solid var(--line); border-radius: 4px; margin: .8rem 0; max-width: 900px; }
+.mail-selector { display: block; }
+.mail-sample { border: 1px solid var(--line); border-radius: 4px; padding: .6rem .9rem; margin: .6rem 0; max-width: 900px; background: #fbfcfe; }
+.mail-sample-head { border-bottom: 1px solid var(--line); padding-bottom: .4rem; }
+.mail-text { white-space: pre-wrap; word-break: break-all; font-size: .85rem; }
+.mail-counts { display: flex; flex-wrap: wrap; gap: 1rem; }
+.mail-st-gesendet { color: var(--ok); } .mail-st-fehlgeschlagen { color: var(--danger); } .mail-st-in_versand { color: #8a5a00; }
+#mail-status-live[hidden] { display: none; }
+#mail-body[hidden], .mail-editor[hidden], #mail-insert-link[hidden] { display: none; }

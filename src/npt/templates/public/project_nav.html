@@ -1,0 +1,7 @@
+<nav class="nav">
+  <span class="project-name" data-testid="project-name">{{ project.name }}</span>
+  <a href="{{ project.base }}/" data-testid="nav-liste"{% if nav_active == "liste" %} aria-current="page"{% endif %}>Liste</a>
+  <a href="{{ project.base }}/uebersicht" data-testid="nav-uebersicht"{% if nav_active == "uebersicht" %} aria-current="page"{% endif %}>Übersicht</a>
+  <a href="{{ project.base }}/hilfe" class="help-link" data-testid="nav-hilfe"{% if nav_active == "hilfe" %} aria-current="page"{% endif %}>Hilfe</a>
+  <span id="live-status" class="live-status" role="status" aria-live="polite" data-testid="live-status" hidden></span>
+</nav>

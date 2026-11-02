@@ -1,0 +1,129 @@
+{% extends "admin/layout.html" %}
+{% block title %}{{ p.name }} – Notfall-Patch-Tracker{% endblock %}
+{% block content %}
+<p><a href="/admin/">← Projekte</a></p>
+<h1 data-testid="project-title">{{ p.name }}</h1>
+{% if p.description %}<p>{{ p.description }}</p>{% endif %}
+<p>Status: <strong class="status-{{ p.status }}" data-testid="project-status">{{ labels.PROJECT_STATUS[p.status] }}</strong>
+  · erstellt {{ p.created_at | dt }}{% if p.created_by %} von <code>{{ p.created_by }}</code>{% endif %}
+  · {{ s.total }} Systeme ({{ s.manual }} manuell angelegt)
+  · Fortschritt <progress class="progress" max="100" value="{{ s.progress_pct }}"></progress> {{ s.progress_pct }} %</p>
+
+<section class="card">
+  <h2>Projekt-URL für Bearbeiter</h2>
+  <div class="copy-row">
+    <input type="text" id="project-url" value="{{ url }}" readonly data-testid="project-url">
+    <button type="button" class="btn" data-copy-target="project-url" data-testid="project-url-copy">Kopieren</button>
+  </div>
+  <p class="hint">Jeder mit dieser URL kann die Liste lesen und die *-Felder bearbeiten. Nur an Berechtigte verteilen.</p>
+  <form method="post" action="/admin/projekte/{{ p.id }}/token" data-confirm="Neue URL erzeugen? Die bisherige URL wird sofort ungültig.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn" data-testid="project-token-new">Token neu generieren</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Status</h2>
+  <p class="hint">Abgeschlossene und archivierte Projekte sind für Bearbeiter schreibgeschützt (Lesen bleibt möglich).</p>
+  {% for t in transitions %}
+  <form method="post" action="/admin/projekte/{{ p.id }}/status" class="inline"
+        data-confirm="Status auf „{{ labels.PROJECT_STATUS[t] }}“ setzen?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="status" value="{{ t }}">
+    <button type="submit" class="btn" data-testid="project-status-{{ t }}">{% if t == "aktiv" %}Wieder öffnen{% elif t == "abgeschlossen" %}{% if p.status == "archiviert" %}Archivierung aufheben{% else %}Abschließen{% endif %}{% else %}Archivieren{% endif %}</button>
+  </form>
+  {% endfor %}
+</section>
+
+<section class="card">
+  <h2>Daten-Upload und Änderungsprotokoll</h2>
+  <p><a class="btn" href="/admin/projekte/{{ p.id }}/upload" data-testid="project-upload-link"
+        title="Leere Zellen im Upload löschen keine vorhandenen Werte.">Excel-Datei in das Projekt hochladen</a>
+    <a class="btn" href="/admin/projekte/{{ p.id }}/aenderungen" data-testid="project-log-link">Änderungsprotokoll</a></p>
+  <p class="hint">Der Upload (Schlüssel System-ID) darf alle Felder überschreiben; abweichende gefüllte Felder werden nur nach Bestätigung übernommen.
+    <strong>Leere Zellen löschen keine vorhandenen Werte.</strong></p>
+</section>
+
+<section class="card">
+  <h2>Mailversand an Anwendungsverantwortliche</h2>
+  <p><a class="btn" href="/admin/projekte/{{ p.id }}/mail" data-testid="project-mail-link">Mailversand / Kampagnen</a></p>
+  <p class="hint">Je Anwendungsverantwortlichem eine Mail mit Links auf seine Systeme (Platzhalter <code>[LINK]</code>), Zielgruppen
+    „System betroffen leer“, „Ja ohne Aktion“ oder eine beliebige Filter-Sicht der Hauptliste.</p>
+</section>
+
+<section class="card" data-testid="backups">
+  <h2>Backups</h2>
+  <form method="post" action="/admin/projekte/{{ p.id }}/backups/einstellungen" class="form filter-form" data-testid="backup-settings">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Intervall
+      <select name="interval" data-testid="backup-interval">
+        {% for k, v in labels.BACKUP_INTERVALS_MIN.items() %}<option value="{{ k }}"{% if p.backup_interval_min == k %} selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Aufbewahrung (letzte n Backups)
+      <input type="number" name="retention" min="1" max="10000" value="{{ p.backup_retention }}" required data-testid="backup-retention">
+    </label>
+    <button type="submit" class="btn">Speichern</button>
+  </form>
+  <p class="hint">Zeitgesteuert wird nur gesichert, wenn sich seit dem letzten Backup Daten geändert haben
+    ({% if has_changes %}<strong>es gibt ungesicherte Änderungen</strong>{% else %}derzeit keine ungesicherten Änderungen{% endif %}{% if p.last_backup_at %}, letztes Backup {{ p.last_backup_at | dt }}{% endif %}).
+    Jedes Backup besteht aus einer JSON-Datei (vollständig, für die Wiederherstellung) und einer Excel-Datei. Ältere Backups über der Aufbewahrung werden gelöscht – alle Auslöser zählen mit.</p>
+  <form method="post" action="/admin/projekte/{{ p.id }}/backups/erstellen" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn btn-primary" data-testid="backup-create">Backup jetzt erstellen</button>
+  </form>
+  {% if backups %}
+  <table class="tbl" data-testid="backup-list">
+    <thead><tr><th>Zeitpunkt</th><th>Auslöser</th><th>Stand (Sequenz)</th><th>Größe</th><th>von</th><th>Download</th><th></th></tr></thead>
+    <tbody>
+    {% for b in backups %}
+      <tr data-testid="backup-{{ b.id }}"><td>{{ b.created_at | dt }}</td><td>{{ labels.BACKUP_TRIGGER.get(b.trigger, b.trigger) }}</td><td>{{ b.change_seq }}</td>
+        <td>{{ (b.size_bytes / 1024) | round(0) | int }} KB</td><td>{% if b.created_by %}<code>{{ b.created_by }}</code>{% endif %}</td>
+        <td><a href="/admin/projekte/{{ p.id }}/backups/{{ b.id }}/datei.json" data-testid="backup-json-{{ b.id }}">JSON</a> ·
+          <a href="/admin/projekte/{{ p.id }}/backups/{{ b.id }}/datei.xlsx" data-testid="backup-xlsx-{{ b.id }}">Excel</a></td>
+        <td>{% if p.status == "aktiv" %}<a href="/admin/projekte/{{ p.id }}/backups/{{ b.id }}/wiederherstellen" data-testid="backup-restore-{{ b.id }}">Wiederherstellen …</a>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if p.status != "aktiv" %}<p class="hint">Wiederherstellen ist nur in aktiven Projekten möglich.</p>{% endif %}
+  {% else %}
+  <p class="hint">Noch keine Backups.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Systeme</h2>
+  <form method="get" action="/admin/projekte/{{ p.id }}" class="form inline-form">
+    <label>Suche nach System-ID oder -Name
+      <input type="text" name="q" value="{{ q }}" maxlength="200" data-testid="project-system-search">
+    </label>
+    <button type="submit" class="btn">Suchen</button>
+  </form>
+  <table class="tbl" data-testid="project-systems">
+    <thead><tr><th>System-ID</th><th>System-Name</th><th>Digital Access Zone</th><th>Herkunft</th><th>System betroffen</th><th></th></tr></thead>
+    <tbody>
+    {% for sys in systems %}
+      <tr><td>{{ sys.system_id }}</td><td>{{ sys.system_name or "" }}</td><td>{{ sys.digital_access_zone or "" }}</td>
+        <td>{{ labels.ORIGIN.get(sys.origin, sys.origin) }}</td><td>{{ labels.label(labels.AFFECTED, sys.affected) }}</td>
+        <td><a href="/admin/projekte/{{ p.id }}/system?sid={{ sys.system_id | urlencode }}" data-testid="edit-{{ sys.system_id }}">Stammdaten bearbeiten</a></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if systems | length >= 200 %}<p class="hint">Es werden höchstens 200 Systeme angezeigt – Suche verfeinern.</p>{% endif %}
+  <p><a href="/admin/projekte/{{ p.id }}/manuell.xlsx" data-testid="export-manual">Export „manuell angelegte Systeme“ (.xlsx)</a>
+    <span class="hint">– zur Nachpflege im Quellsystem; fließt nicht automatisch in die Stammdaten zurück.</span></p>
+</section>
+
+<section class="card">
+  <h2>Projekt löschen</h2>
+  <p class="hint">Löscht das Projekt mit allen Systemen, Bearbeitungsständen und Backups endgültig. Das Änderungsprotokoll bleibt erhalten.
+    Zur Bestätigung den Projektnamen exakt eingeben.</p>
+  <form method="post" action="/admin/projekte/{{ p.id }}/loeschen" class="form" data-confirm="Projekt endgültig löschen?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Projektname
+      <input type="text" name="confirm_name" required autocomplete="off" data-testid="project-delete-name">
+    </label>
+    <button type="submit" class="btn btn-danger" data-testid="project-delete">Endgültig löschen</button>
+  </form>
+</section>
+{% endblock %}

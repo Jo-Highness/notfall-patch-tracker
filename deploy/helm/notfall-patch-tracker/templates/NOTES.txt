@@ -1,0 +1,40 @@
+Notfall-Patch-Tracker {{ .Chart.AppVersion }} – Release {{ .Release.Name }} (Namespace {{ .Release.Namespace }})
+
+Bearbeiter:  {{ .Values.publicBaseUrl }}  -> Service {{ include "npt.fullname" . }}-public:8000
+Admin (mTLS): {{ .Values.adminBaseUrl }}  -> Service {{ include "npt.fullname" . }}-admin:{{ .Values.admin.service.port }} ({{ .Values.admin.service.type }}, TLS endet im Gateway-Sidecar)
+
+Pods: {{ include "npt.fullname" . }}-public ({{ if .Values.public.hpa.enabled }}HPA {{ default .Values.public.replicas .Values.public.hpa.minReplicas }}-{{ .Values.public.hpa.maxReplicas }}{{ else }}{{ .Values.public.replicas }}{{ end }} x {{ .Values.public.webWorkers }} Worker), {{ include "npt.fullname" . }}-backend (1, Recreate)
+DB-Verbindungsbudget: {{ include "npt.dbBudget" . }} von {{ .Values.database.maxConnections }} (max_connections der Datenbank muss mindestens so hoch sein)
+
+Pruefen:  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+WICHTIG
+- Der Projekt-Token steht im URL-Pfad (/p/<token>/...). Access-Logs des Ingress-/Gateway-
+  Controllers duerfen den Pfad nicht protokollieren (docs/KUBERNETES.md, „Log-Maskierung“).
+{{- if eq .Values.ingress.className "nginx" }}
+  ingress-nginx: enable-access-log=false ist gesetzt; das Error-Log ist nur controllerweit
+  steuerbar und kann die Request-Zeile enthalten.
+{{- end }}
+- Die Datenbank muss log_parameter_max_length=0, log_parameter_max_length_on_error=0 und
+  log_error_verbosity=terse setzen (Token und Personendaten nicht ins Postgres-Log).
+{{- if .Values.secrets.create }}
+- secrets.create=true: Secret-Werte stehen im Helm-Release. Nur fuer Dev/Test; im Betrieb
+  secrets.existingSecret verwenden.
+{{- end }}
+{{- if not .Values.backend.persistence.enabled }}
+- backend.persistence.enabled=false: Backup-Dateien liegen in einem emptyDir und gehen beim
+  Neustart des backend-Pods verloren.
+{{- end }}
+{{- if and .Values.networkPolicy.enabled (not (or .Values.networkPolicy.ingressController.namespaceSelector .Values.networkPolicy.ingressController.podSelector)) }}
+- networkPolicy.ingressController ist leer: der Bearbeiter-Port 8000 nimmt keinen Verkehr
+  vom Ingress-Controller an (nur helm test). Selektor des Controllers eintragen.
+{{- end }}
+{{- if not .Values.networkPolicy.enabled }}
+- networkPolicy.enabled=false: jeder Pod im Cluster kann X-Forwarded-For an den
+  Bearbeiter-Port senden (Rate-Limit/Audit-IP faelschbar).
+{{- end }}
+{{- if eq .Values.admin.service.type "NodePort" }}
+- admin.service.type=NodePort ist nur fuer Tests gedacht.
+{{- end }}
+- Backups: das PVC {{ if .Values.backend.persistence.existingClaim }}{{ .Values.backend.persistence.existingClaim }}{{ else }}{{ include "npt.fullname" . }}-backups{{ end }} bleibt bei helm uninstall erhalten; seine Sicherung
+  ist Aufgabe des Betreibers (ebenso Datenbank-Backup/PITR).

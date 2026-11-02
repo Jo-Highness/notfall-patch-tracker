@@ -1,0 +1,102 @@
+{% extends "admin/layout.html" %}
+{% block title %}Vorschau Stammdatenimport – Notfall-Patch-Tracker{% endblock %}
+{% block content %}
+{% set st = pv.staged %}{% set d = pv.diff %}{% set rep = st.report %}
+<h1>Vorschau Stammdatenimport</h1>
+<p class="hint">Datei: <strong>{{ st.file_name or "–" }}</strong> ({{ labels.MASTER_SOURCE.get(st.source, st.source) }}),
+  hochgeladen {{ st.created_at | dt }} von <code>{{ st.created_by }}</code>, {{ st.records | length }} gültige Datensätze.
+  Gelieferte Spalten: {% for c in d.columns %}{{ fields.DISPLAY_NAMES[c] }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+
+<section class="card summary" data-testid="preview-summary">
+  <span class="kpi"><strong data-testid="count-new">{{ d.new | length }}</strong> neu</span>
+  <span class="kpi"><strong data-testid="count-changed">{{ d.changed | length }}</strong> geändert</span>
+  <span class="kpi"><strong data-testid="count-missing">{{ d.missing | length }}</strong> im Upload fehlend</span>
+  <span class="kpi"><strong data-testid="count-unchanged">{{ d.unchanged }}</strong> unverändert</span>
+  <span class="kpi"><strong data-testid="count-errors">{{ rep.error_count }}</strong> Fehler</span>
+  <span class="kpi"><strong data-testid="count-warnings">{{ rep.warning_count }}</strong> Warnungen</span>
+</section>
+
+{% if rep.error_count %}
+<section class="card">
+  <h2>Fehler (Übernahme nicht möglich)</h2>
+  <p class="hint">Doppelte oder leere System-IDs müssen in der Datei korrigiert werden. Danach die Datei erneut hochladen.</p>
+  <table class="tbl" data-testid="report-errors">
+    <thead><tr><th>Zeile</th><th>System-ID</th><th>Meldung</th></tr></thead>
+    <tbody>{% for i in rep.errors %}<tr><td>{{ i.row or "" }}</td><td>{{ i.system_id or "" }}</td><td>{{ i.message }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% if rep.error_count > rep.errors | length %}<p class="hint">… und {{ rep.error_count - rep.errors | length }} weitere.</p>{% endif %}
+</section>
+{% endif %}
+
+{% if rep.warning_count %}
+<section class="card">
+  <details>
+    <summary><strong>Warnungen ({{ rep.warning_count }})</strong>{% if rep.invalid_emails %} – davon {{ rep.invalid_emails }} × ungültige/fehlende E-Mail-Adresse{% endif %}{% if rep.rejected_reserved %}, {{ rep.rejected_reserved }} × Präfix „NEW-“ abgelehnt{% endif %}</summary>
+    <table class="tbl" data-testid="report-warnings">
+      <thead><tr><th>Zeile</th><th>System-ID</th><th>Meldung</th></tr></thead>
+      <tbody>{% for i in rep.warnings %}<tr><td>{{ i.row or "" }}</td><td>{{ i.system_id or "" }}</td><td>{{ i.message }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% if rep.warning_count > rep.warnings | length %}<p class="hint">… und {{ rep.warning_count - rep.warnings | length }} weitere.</p>{% endif %}
+  </details>
+</section>
+{% endif %}
+
+<form method="post" action="/admin/stammdaten/vorschau/{{ st.id }}/uebernehmen" data-testid="apply-form"
+      data-confirm="Stammdatenimport jetzt übernehmen?">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="fingerprint" value="{{ pv.fingerprint }}">
+
+  <section class="card">
+    <details{% if d.new | length <= 50 %} open{% endif %}>
+      <summary><strong>Neue Systeme ({{ d.new | length }})</strong></summary>
+      {% if d.new %}
+      <table class="tbl" data-testid="list-new">
+        <thead><tr><th>System-ID</th><th>System-Name</th><th>Digital Access Zone</th><th>Anwendungsverantwortlicher</th></tr></thead>
+        <tbody>{% for r in d.new %}<tr><td>{{ r.system_id }}</td><td>{{ r.values.get("system_name") or "" }}</td><td>{{ r.values.get("digital_access_zone") or "" }}</td><td>{{ r.values.get("app_owner") or "" }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% endif %}
+    </details>
+  </section>
+
+  <section class="card">
+    <details{% if d.changed | length <= 50 %} open{% endif %}>
+      <summary><strong>Geänderte Systeme ({{ d.changed | length }})</strong></summary>
+      {% if d.changed %}
+      <table class="tbl" data-testid="list-changed">
+        <thead><tr><th>System-ID</th><th>System-Name</th><th>Feld</th><th>bisher</th><th>neu</th></tr></thead>
+        <tbody>
+        {% for c in d.changed %}
+          {% if c.reappeared %}<tr><td>{{ c.system_id }}</td><td>{{ c.system_name or "" }}</td><td colspan="3"><span class="tag">wieder enthalten</span> Markierung „fehlt“ wird aufgehoben</td></tr>{% endif %}
+          {% for f in c.changes %}<tr><td>{{ c.system_id }}</td><td>{{ c.system_name or "" }}</td><td>{{ fields.DISPLAY_NAMES[f.field] }}</td><td class="old">{{ f.old if f.old is not none else "(leer)" }}</td><td class="new">{{ f.new if f.new is not none else "(leer)" }}</td></tr>{% endfor %}
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </details>
+  </section>
+
+  <section class="card">
+    <details{% if d.missing | length <= 50 %} open{% endif %}>
+      <summary><strong>Im Upload fehlende Systeme ({{ d.missing | length }})</strong></summary>
+      <p class="hint">Standard: Fehlende Systeme bleiben erhalten und werden markiert. Nur ausdrücklich ausgewählte Systeme werden aus den Stammdaten entfernt
+        (bestehende Projekte sind davon nicht betroffen).</p>
+      {% if d.missing %}
+      <label class="check"><input type="checkbox" data-check-all="remove" data-testid="remove-all"> alle auswählen</label>
+      <table class="tbl" data-testid="list-missing">
+        <thead><tr><th>Entfernen</th><th>System-ID</th><th>System-Name</th><th>bereits markiert seit</th></tr></thead>
+        <tbody>{% for m in d.missing %}<tr><td><input type="checkbox" name="remove" value="{{ m.system_id }}" data-testid="remove-{{ m.system_id }}"></td><td>{{ m.system_id }}</td><td>{{ m.system_name or "" }}</td><td>{{ m.missing_since or "" }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% endif %}
+    </details>
+  </section>
+
+  <p>
+    <button type="submit" class="btn btn-primary" data-testid="apply-submit" {% if not pv.can_apply %}disabled{% endif %}>Übernehmen</button>
+    {% if not pv.can_apply %}<span class="hint">Übernahme gesperrt: die Datei enthält Fehler.</span>{% endif %}
+  </p>
+</form>
+<form method="post" action="/admin/stammdaten/vorschau/{{ st.id }}/verwerfen">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit" class="btn" data-testid="discard-submit">Verwerfen</button>
+</form>
+{% endblock %}

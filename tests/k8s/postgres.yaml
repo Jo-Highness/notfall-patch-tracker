@@ -1,0 +1,74 @@
+# Wegwerf-PostgreSQL fuer den kind-Test (nicht fuer den Betrieb): emptyDir, PodSecurity
+# "restricted", die Log-Parameter aus docker-compose.yml. Passwort aus Secret npt-app.
+apiVersion: v1
+kind: Service
+metadata:
+  name: npt-db
+  labels: { app.kubernetes.io/name: npt-test-db }
+spec:
+  selector: { app.kubernetes.io/name: npt-test-db }
+  ports:
+    - { name: pg, port: 5432, targetPort: 5432 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: npt-db
+  labels: { app.kubernetes.io/name: npt-test-db }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app.kubernetes.io/name: npt-test-db }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: npt-test-db }
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: postgres
+          image: postgres:16.15-alpine
+          imagePullPolicy: Never
+          args:
+            - -c
+            - max_connections=200
+            - -c
+            - log_parameter_max_length=0
+            - -c
+            - log_parameter_max_length_on_error=0
+            - -c
+            - log_error_verbosity=terse
+          env:
+            - { name: POSTGRES_DB, value: npt }
+            - { name: POSTGRES_USER, value: npt }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: npt-app, key: POSTGRES_PASSWORD } }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+            - { name: POSTGRES_INITDB_ARGS, value: "--encoding=UTF8 --locale=C.UTF-8" }
+          ports:
+            - { containerPort: 5432 }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "npt", "-d", "npt"] }
+            periodSeconds: 2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: run, mountPath: /var/run/postgresql }
+            - { name: tmp, mountPath: /tmp }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+      volumes:
+        - { name: data, emptyDir: {} }
+        - { name: run, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }

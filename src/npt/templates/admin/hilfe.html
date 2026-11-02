@@ -1,0 +1,8 @@
+{% extends "admin/layout.html" %}
+{% block title %}{{ title }} – Admin – Notfall-Patch-Tracker{% endblock %}
+{% block content %}
+{# Handbuch: aus docs/handbuch/admin.md, serverseitig gerendert und mit nh3 sanitisiert (npt.handbook). #}
+<article class="handbook" data-testid="handbook">
+{{ handbook | safe }}
+</article>
+{% endblock %}

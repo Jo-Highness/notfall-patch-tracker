@@ -1,0 +1,206 @@
+# Notfall-Patch-Tracker – portable Compose-Datei (Auftrag 9, NPT-11).
+#
+# Veroeffentlicht werden nur:
+#   - der Bearbeiter-Port der App   (Default 127.0.0.1:8080 -> davor gehoert ein Reverse Proxy)
+#   - der mTLS-Port des admin-gateway (Default 0.0.0.0:8443)
+# Der Admin-Port der App (8001) ist nur im internen Netz admin_net erreichbar.
+# Ein Betriebs-Overlay (App ohne Host-Port, Secrets aus einem eigenen Secret-Store) ist eine
+# kuenftige Option fuer das Ausrollen und liegt NICHT in diesem Repository (DECISIONS B15).
+# DATABASE_URL wird hier bewusst nicht durchgereicht: die App nutzt immer den db-Dienst
+# (POSTGRES_*); DATABASE_URL gilt nur beim Betrieb ausserhalb dieser Compose-Datei.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  db:
+    image: postgres:16.15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-npt}
+      POSTGRES_USER: ${POSTGRES_USER:-npt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt (.env)}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+      TZ: UTC
+    command:
+      - postgres
+      - -c
+      - max_connections=${POSTGRES_MAX_CONNECTIONS:-200}
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - log_min_duration_statement=1000
+      # Gebundene Parameter (z. B. Projekt-Token) nie ins Postgres-Log (Auftrag 8.2).
+      - -c
+      - log_parameter_max_length=0
+      - -c
+      - log_parameter_max_length_on_error=0
+      # Fehlermeldungen ohne DETAIL/HINT/CONTEXT: DETAIL einer Unique-Verletzung nennt
+      # Schluesselwerte im Klartext (z. B. E-Mail-Adresse); Statements selbst enthalten
+      # nur Platzhalter ($1), siehe SECURITY.md „PostgreSQL-Log".
+      - -c
+      - log_error_verbosity=terse
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - db_net
+    shm_size: 256m
+    # Haertung: Rootfs read-only, nur die Capabilities, die der Entrypoint fuer
+    # chown/Benutzerwechsel braucht (su-exec setzt keine setuid-Bits voraus).
+    read_only: true
+    tmpfs:
+      - /var/run/postgresql:size=1m
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: ${DB_MEM_LIMIT:-1g}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    logging: *logging
+
+  app:
+    build:
+      context: .
+      target: runtime
+      # OCI-Labels (J15): Commit und Quell-URL optional aus der Umgebung/.env.
+      args:
+        NPT_REVISION: ${NPT_REVISION:-}
+        NPT_SOURCE_URL: ${NPT_SOURCE_URL:-}
+    image: notfall-patch-tracker:${NPT_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ROLE: ${APP_ROLE:-all}
+      WEB_WORKERS: ${WEB_WORKERS:-6}
+      ADMIN_WORKERS: ${ADMIN_WORKERS:-2}
+      ADMIN_BIND_ADDR: ${APP_ADMIN_IP:-172.31.250.10}
+      ADMIN_GATEWAY_CIDR: ${GATEWAY_ADMIN_IP:-172.31.250.11}/32
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-npt}
+      POSTGRES_USER: ${POSTGRES_USER:-npt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt (.env)}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      ADMIN_BASE_URL: ${ADMIN_BASE_URL:-}
+      CSRF_SECRET: ${CSRF_SECRET:?CSRF_SECRET fehlt (.env)}
+      ADMIN_CERT_ID_ATTRIBUTE: ${ADMIN_CERT_ID_ATTRIBUTE:-subject_dn}
+      ADMIN_BOOTSTRAP_IDS: ${ADMIN_BOOTSTRAP_IDS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DISPLAY_TZ: ${DISPLAY_TZ:-Europe/Berlin}
+      BACKUP_DIR: /data/backups
+      RATE_LIMIT_WRITES: ${RATE_LIMIT_WRITES:-30}
+      RATE_LIMIT_WRITES_WINDOW_S: ${RATE_LIMIT_WRITES_WINDOW_S:-10}
+      RATE_LIMIT_CREATE: ${RATE_LIMIT_CREATE:-10}
+      RATE_LIMIT_CREATE_WINDOW_S: ${RATE_LIMIT_CREATE_WINDOW_S:-60}
+      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-20}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
+      SMTP_TIMEOUT_S: ${SMTP_TIMEOUT_S:-30}
+      MAIL_RATE_PER_SEC: ${MAIL_RATE_PER_SEC:-5}
+      MASTER_API_ENABLED: ${MASTER_API_ENABLED:-false}
+      MASTER_API_URL: ${MASTER_API_URL:-}
+      MASTER_API_TOKEN: ${MASTER_API_TOKEN:-}
+      MASTER_API_SCHEDULE_MINUTES: ${MASTER_API_SCHEDULE_MINUTES:-0}
+    ports:
+      - "${PUBLIC_BIND_ADDR:-127.0.0.1}:${PUBLIC_PORT:-8080}:8000"
+    volumes:
+      - backups:/data/backups
+    networks:
+      public_net: {}
+      admin_net:
+        ipv4_address: ${APP_ADMIN_IP:-172.31.250.10}
+      db_net: {}
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: ${APP_MEM_LIMIT:-1536m}
+    stop_grace_period: 30s
+    logging: *logging
+
+  admin-gateway:
+    build:
+      context: ./gateway
+      # OCI-Labels (J15): Commit und Quell-URL optional aus der Umgebung/.env.
+      args:
+        NPT_REVISION: ${NPT_REVISION:-}
+        NPT_SOURCE_URL: ${NPT_SOURCE_URL:-}
+    image: notfall-patch-tracker-gateway:${NPT_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      ADMIN_CA_BUNDLE_PATH: ${ADMIN_CA_BUNDLE_PATH:-/etc/npt-gateway/pki/ca-bundle.pem}
+      ADMIN_CRL_PATH: ${ADMIN_CRL_PATH:-}
+      ADMIN_VERIFY_DEPTH: ${ADMIN_VERIFY_DEPTH:-2}
+      GATEWAY_TLS_CERT_PATH: ${GATEWAY_TLS_CERT_PATH:-/etc/npt-gateway/pki/server.crt}
+      GATEWAY_TLS_KEY_PATH: ${GATEWAY_TLS_KEY_PATH:-/etc/npt-gateway/pki/server.key}
+      ADMIN_UPSTREAM: ${APP_ADMIN_IP:-172.31.250.10}:8001
+      # client_max_body_size = UPLOAD_MAX_MB + 1 MB Multipart-Overhead (entrypoint.sh).
+      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-20}
+      CRL_RELOAD_INTERVAL: ${CRL_RELOAD_INTERVAL:-60}
+    ports:
+      - "${GATEWAY_BIND_ADDR:-0.0.0.0}:${GATEWAY_PORT:-8443}:8443"
+    volumes:
+      # Verzeichnis-Mount (nicht Einzeldatei), damit ein ersetzter CRL-/Zertifikats-
+      # Inhalt ohne Container-Neustart sichtbar wird.
+      - ${ADMIN_PKI_DIR:-./pki-out/gateway}:/etc/npt-gateway/pki:ro
+    networks:
+      gateway_net: {}
+      admin_net:
+        ipv4_address: ${GATEWAY_ADMIN_IP:-172.31.250.11}
+    init: true
+    read_only: true
+    tmpfs:
+      - /etc/nginx/conf.d:size=1m
+      - /run/nginx:size=1m
+      - /var/cache/nginx:size=32m
+      - /tmp:size=8m
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: ${GATEWAY_MEM_LIMIT:-128m}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/gw-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging: *logging
+
+networks:
+  # Bearbeiter-Port der App (nicht internal: veroeffentlichter Port, ausgehend SMTP).
+  public_net: {}
+  # Netz mit dem veroeffentlichten mTLS-Port des Gateways.
+  gateway_net: {}
+  # Nur Gateway <-> App-Admin-Port; feste Adressen fuer die Absenderpruefung (NPT-06).
+  admin_net:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${ADMIN_NET_SUBNET:-172.31.250.0/28}
+  # Nur App <-> DB.
+  db_net:
+    internal: true
+
+volumes:
+  db_data: {}
+  backups: {}
