@@ -6,6 +6,10 @@ Nur Standardbibliothek (kein Settings-Import, schneller Start alle paar Sekunden
 - Rolle ``jobs`` mit ``JOBS_HEARTBEAT_FILE``: Datei hoechstens
   ``JOBS_HEARTBEAT_MAX_AGE_S`` (120 s) alt.
 
+``python -m npt.probe --docker`` ist der Docker-HEALTHCHECK des Abbilds (K14): Mit Rolle
+``public`` (auch ``all``, der Compose-Default) wie bisher nur ``GET /healthz`` auf
+``127.0.0.1:PUBLIC_LISTEN_PORT`` (Status 200); ohne ``public`` die Pruefungen oben.
+
 Exitcode 0 = gesund, 1 = krank (Grund auf stderr, ohne Interna). Eine ungueltige
 Umgebung (z. B. nicht-numerischer ``ADMIN_LISTEN_PORT``) zaehlt als krank und wird
 ohne Traceback und ohne den Wert gemeldet.
@@ -17,11 +21,13 @@ import os
 import socket
 import sys
 import time
-from collections.abc import Mapping
+import urllib.request
+from collections.abc import Mapping, Sequence
 
 from npt.limits import JOBS_HEARTBEAT_MAX_AGE_S
 
 TCP_TIMEOUT_S = 2.0
+HTTP_TIMEOUT_S = 4.0
 ALL_ROLES = frozenset({"public", "admin", "jobs"})
 
 
@@ -57,6 +63,30 @@ def check_heartbeat(path: str, max_age_s: float = JOBS_HEARTBEAT_MAX_AGE_S) -> s
     return None
 
 
+def check_http(port: int, timeout_s: float = HTTP_TIMEOUT_S) -> str | None:
+    url = f"http://127.0.0.1:{port}/healthz"
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # kein http_proxy
+    try:
+        with opener.open(url, timeout=timeout_s) as resp:
+            if resp.status == 200:
+                return None
+    except (OSError, ValueError):
+        pass
+    return f"Bearbeiter-Port {port}: /healthz nicht 200"
+
+
+def run_docker(env: Mapping[str, str]) -> list[str]:
+    """Docker-HEALTHCHECK: ``public`` -> nur ``/healthz`` (wie bis 0.2.0), sonst :func:`run`."""
+    roles = roles_from_env(env.get("APP_ROLE", "all"))
+    if "public" not in roles:
+        return run(env)
+    port = parse_port(env.get("PUBLIC_LISTEN_PORT", "8000") or "8000")
+    if port is None:
+        return ["PUBLIC_LISTEN_PORT ist keine gueltige Portnummer"]
+    p = check_http(port)
+    return [] if p is None else [p]
+
+
 def run(env: Mapping[str, str]) -> list[str]:
     roles = roles_from_env(env.get("APP_ROLE", "all"))
     problems: list[str] = []
@@ -73,12 +103,12 @@ def run(env: Mapping[str, str]) -> list[str]:
     return problems
 
 
-def main() -> int:
-    problems = run(os.environ)
+def main(argv: Sequence[str] | None = None) -> int:
+    problems = run_docker(os.environ) if "--docker" in (argv or ()) else run(os.environ)
     for p in problems:
         print(f"probe: {p}", file=sys.stderr)
     return 1 if problems else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

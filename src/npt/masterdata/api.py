@@ -8,6 +8,11 @@ implementieren (Abbildung der API-Antwort auf ``MasterRecord``).
 Verbindliche Auflage: Ein (auch zeitgesteuerter) API-Abruf legt nur eine
 **Vorschau** an (``staged_uploads``); uebernommen wird ausschliesslich nach
 Bestaetigung durch einen Admin – derselbe Diff-Mechanismus wie beim Excel-Import.
+
+Weiterleitungen (K14): nur auf ``https://`` mit demselben Host und Port wie
+``MASTER_API_URL``; jede andere Weiterleitung bricht den Abruf ab, bevor eine Anfrage an
+das neue Ziel geht. Der Bearer-Token steht als nicht weitergeleiteter Header in der
+Anfrage und wird nur bei einer zulaessigen Weiterleitung erneut gesetzt.
 """
 
 from __future__ import annotations
@@ -15,8 +20,10 @@ from __future__ import annotations
 import json
 import logging
 import time
+import urllib.parse
 import urllib.request
-from typing import Any, Final
+from http.client import HTTPMessage
+from typing import IO, Any, Final
 
 from npt.config import Settings
 from npt.masterdata.source import (
@@ -30,6 +37,59 @@ log = logging.getLogger("npt.masterdata.api")
 
 FETCH_TIMEOUT_S: Final = 30
 MAX_RESPONSE_BYTES: Final = 50 * 1024 * 1024
+
+
+def _origin(url: str) -> tuple[str, str, int] | None:
+    """(Schema, Host, Port) einer https-URL, sonst ``None``."""
+    try:
+        parts = urllib.parse.urlsplit(url)
+        port = parts.port or 443
+    except ValueError:
+        return None
+    if parts.scheme.lower() != "https" or not parts.hostname:
+        return None
+    return ("https", parts.hostname.lower(), port)
+
+
+class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Folgt Weiterleitungen nur auf https mit gleichem Host/Port; setzt dann den Token neu."""
+
+    def __init__(self, url: str, token: str) -> None:
+        super().__init__()
+        self._origin = _origin(url)
+        self._token = token
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: IO[bytes],
+        code: int,
+        msg: str,
+        headers: HTTPMessage,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        if self._origin is None or _origin(newurl) != self._origin:
+            fp.close()
+            # Ziel-URL bewusst nicht in der Meldung (koennte Zugangsdaten enthalten).
+            raise MasterDataError(
+                f"Stammdaten-API leitet weiter (HTTP {code}), aber nicht auf https:// "
+                "mit demselben Host und Port; Abruf abgebrochen. MASTER_API_URL auf die "
+                "endgueltige Adresse setzen."
+            )
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and self._token:
+            new.add_unredirected_header("Authorization", f"Bearer {self._token}")
+        return new
+
+
+def open_api(url: str, token: str, timeout: float = FETCH_TIMEOUT_S) -> Any:
+    """GET mit Token und eingeschraenkten Weiterleitungen (siehe Moduldoku)."""
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})  # noqa: S310
+    if token:
+        # Nicht weitergeleiteter Header: urllib uebernimmt ihn bei Weiterleitungen nicht.
+        req.add_unredirected_header("Authorization", f"Bearer {token}")
+    opener = urllib.request.build_opener(SameOriginRedirectHandler(url, token))
+    return opener.open(req, timeout=timeout)
 
 
 class ApiMasterDataSource(MasterDataSource):
@@ -49,11 +109,8 @@ class ApiMasterDataSource(MasterDataSource):
         url = self._settings.MASTER_API_URL
         if not url.startswith("https://"):
             raise MasterDataError("MASTER_API_URL muss https:// verwenden.")
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})  # noqa: S310
         token = self._settings.MASTER_API_TOKEN.get_secret_value()
-        if token:
-            req.add_header("Authorization", f"Bearer {token}")
-        with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT_S) as resp:  # noqa: S310
+        with open_api(url, token) as resp:
             body = resp.read(MAX_RESPONSE_BYTES + 1)
         if len(body) > MAX_RESPONSE_BYTES:
             raise MasterDataError("Antwort der Stammdaten-API ist zu groß.")

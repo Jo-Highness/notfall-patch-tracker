@@ -11,7 +11,7 @@ Zielgruppe: Betrieb/IT. Architektur und Begründungen: `docs/ARCHITECTURE.md`,
 |---|---|
 | Betriebssystem | Linux-Host (x86_64) mit Docker |
 | Docker | Docker Engine ≥ 24, Docker Compose v2 ≥ 2.20 (`docker compose version`) |
-| Netz ausgehend | beim Bauen: Docker Hub (`python:3.12.16-slim-bookworm`, `postgres:16.15-alpine`, `nginx:1.31.8-alpine`, Basisabbilder per Digest gepinnt) und PyPI; im Betrieb: nur der SMTP-Server |
+| Netz ausgehend | beim Bauen: Docker Hub (`python:3.12.16-slim-trixie`, `postgres:16.15-alpine`, `nginx:1.31.8-alpine`, Basisabbilder per Digest gepinnt) und PyPI; im Betrieb: nur der SMTP-Server |
 | Reverse Proxy | vorhandener nginx/Traefik o. ä. mit TLS vor dem Bearbeiter-Port (Abschnitt 5) |
 | PKI | CA, die Client-Zertifikate für Admins ausstellt; Server-Zertifikat für das admin-gateway |
 

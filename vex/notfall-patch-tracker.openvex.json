@@ -1,0 +1,623 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "urn:notfall-patch-tracker:vex:0.2.1",
+  "author": "Notfall-Patch-Tracker-Projekt",
+  "role": "Hersteller",
+  "timestamp": "2026-11-02T00:00:00Z",
+  "version": 1,
+  "tooling": "von Hand gepflegt; Bewertung und Begruendung: docs/DECISIONS.md K14, Anwendung: scripts/sbom.sh --scan",
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "GHSA-v3m3-f69x-jf25"
+      },
+      "products": [
+        {
+          "@id": "pkg:npm/quill@2.0.3"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "inline_mitigations_already_exist",
+      "impact_statement": "XSS im HTML-Export getSemanticHTML. Quill wird nur im Admin-Mail-Editor (hinter mTLS) genutzt; das Ergebnis von getSemanticHTML wird nur in ein Formularfeld (textarea.value) geschrieben, nie ins DOM eingefuegt. Der Server bereinigt den Mailtext vor dem Speichern, der Vorschau und dem Versand mit einer nh3-Allowlist (npt.mail.sanitize); die CSP erlaubt keine Inline-Skripte (script-src 'self'). Kein behobenes Quill-Release verfuegbar (2.0.3 ist aktuell)."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-60876"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/busybox@1.37.0-r31"
+        },
+        {
+          "@id": "pkg:apk/alpine/busybox-binsh@1.37.0-r31"
+        },
+        {
+          "@id": "pkg:apk/alpine/ssl_client@1.37.0-r31"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "Luecke in BusyBox wget (CR/LF im Request-Target). wget wird in Gateway und TLS-Proxy nur vom Healthcheck bzw. der Kubernetes-Probe mit fester URL (http://127.0.0.1:8080/gw-health bzw. :8081/tls-health) aufgerufen; keine Komponente reicht externe Eingaben an wget oder ssl_client weiter, nginx ruft BusyBox nicht auf. Kein Fix in Alpine 3.24 (busybox 1.37.0-r31) verfuegbar."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-19499"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "strfmon/strfmon_l: Kein Programm und keine Bibliothek im App-Abbild importiert strfmon oder strfmon_l (geprueft per nm -D --undefined-only ueber alle ELF-Dateien des Abbilds, DECISIONS K14); CPython ruft die Funktion nicht auf."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-5435"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "ns_printrr/ns_printrrf/fp_nquery (veraltet): Kein Programm und keine Bibliothek im App-Abbild importiert eine dieser Funktionen (geprueft per nm -D --undefined-only ueber alle ELF-Dateien des Abbilds, DECISIONS K14); CPython ruft die Funktion nicht auf. Die Resolver-Debugausgabe (RES_OPTIONS debug) ist nicht aktiv."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-6238"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "ns_printrr/ns_printrrf/fp_nquery (veraltet): Kein Programm und keine Bibliothek im App-Abbild importiert eine dieser Funktionen (geprueft per nm -D --undefined-only ueber alle ELF-Dateien des Abbilds, DECISIONS K14); CPython ruft die Funktion nicht auf. Die Resolver-Debugausgabe (RES_OPTIONS debug) ist nicht aktiv."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-6368"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "wordexp: Kein Programm und keine Bibliothek im App-Abbild importiert wordexp (geprueft per nm -D --undefined-only ueber alle ELF-Dateien des Abbilds, DECISIONS K14); CPython ruft die Funktion nicht auf."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-6791"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Tilde-Expansion (parse_tilde) in wordexp: Kein Programm und keine Bibliothek im App-Abbild importiert wordexp (geprueft per nm -D --undefined-only ueber alle ELF-Dateien des Abbilds, DECISIONS K14); CPython ruft die Funktion nicht auf."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-19542"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "tdelete wird im Abbild nur von libtinfo (bash/readline bei interaktiver Nutzung durch Betreiber) importiert; die Anwendung (Python, gunicorn/uvicorn, Wheels) ruft tdelete nicht auf."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-80489"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "iconv (EUC-JISX0213): Die Anwendung nutzt iconv nicht - CPython bringt eigene Codecs mit; iconv_open importieren nur bash, diffutils, printf und das iconv-Programm, die die Anwendung nicht ausfuehrt."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-77117"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "iconv (SHIFT_JISX0213): Die Anwendung nutzt iconv nicht - CPython bringt eigene Codecs mit; iconv_open importieren nur bash, diffutils, printf und das iconv-Programm, die die Anwendung nicht ausfuehrt."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-84243"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "gettext/LANGUAGE: Die Umgebung des Containers legt allein der Betreiber fest (Compose/Helm); Anfragen von aussen koennen keine Umgebungsvariablen setzen."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-8674"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "Resolver-Suchliste: /etc/resolv.conf stellt die Container-Laufzeit, LOCALDOMAIN nur der Betreiber; von aussen nicht beeinflussbar."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-18374"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "fopen mit ,ccs=: Ausnutzbar nur, wenn der Modus-String aus Eingaben stammt. CPython oeffnet Dateien ueber open(2); kein Programm im Abbild uebergibt fopen einen von aussen bestimmten Modus."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-89092"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Betrifft den nscd-Dienst; das Paket nscd ist im Abbild nicht installiert."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-86805"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Betrifft nur setuid/setgid-Programme (AT_SECURE). Das Abbild enthaelt keine setuid/setgid-Dateien (geprueft, DECISIONS K14), der Container laeuft als UID 10001 mit no-new-privileges bzw. allowPrivilegeEscalation=false."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-95818"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Betrifft nur setuid/setgid-Programme (AT_SECURE). Das Abbild enthaelt keine setuid/setgid-Dateien (geprueft, DECISIONS K14), der Container laeuft als UID 10001 mit no-new-privileges bzw. allowPrivilegeEscalation=false."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-97399"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Betrifft nur die fuer Power8 (ppc64le) optimierte strncasecmp-Variante; die Abbilder werden fuer amd64/arm64 gebaut."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-95619"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/gcc-14-base@14.2.0-19"
+        },
+        {
+          "@id": "pkg:deb/debian/libgcc-s1@14.2.0-19"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Luecke in libstdc++ (aligned operator new). libstdc++6 ist im App-Abbild entfernt (Dockerfile, K14); gcc-14-base enthaelt nur Dokumentation, libgcc-s1 nur libgcc_s (Unwinder/Laufzeithilfen) ohne libstdc++-Code."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-102010"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/gcc-14-base@14.2.0-19"
+        },
+        {
+          "@id": "pkg:deb/debian/libgcc-s1@14.2.0-19"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Luecke in libstdc++ (priority_queue erase_if). libstdc++6 ist im App-Abbild entfernt (Dockerfile, K14); gcc-14-base enthaelt nur Dokumentation, libgcc-s1 nur libgcc_s (Unwinder/Laufzeithilfen) ohne libstdc++-Code."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-114691"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/gcc-14-base@14.2.0-19"
+        },
+        {
+          "@id": "pkg:deb/debian/libgcc-s1@14.2.0-19"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Luecke in libstdc++ (std::vector<bool>). libstdc++6 ist im App-Abbild entfernt (Dockerfile, K14); gcc-14-base enthaelt nur Dokumentation, libgcc-s1 nur libgcc_s (Unwinder/Laufzeithilfen) ohne libstdc++-Code."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-115455"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/gcc-14-base@14.2.0-19"
+        },
+        {
+          "@id": "pkg:deb/debian/libgcc-s1@14.2.0-19"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Luecke in libstdc++ (bitset-Extraktion aus wide streams). libstdc++6 ist im App-Abbild entfernt (Dockerfile, K14); gcc-14-base enthaelt nur Dokumentation, libgcc-s1 nur libgcc_s (Unwinder/Laufzeithilfen) ohne libstdc++-Code."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-114690"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/gcc-14-base@14.2.0-19"
+        },
+        {
+          "@id": "pkg:deb/debian/libgcc-s1@14.2.0-19"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Luecke in libstdc++ (parallel search (parallel mode)). libstdc++6 ist im App-Abbild entfernt (Dockerfile, K14); gcc-14-base enthaelt nur Dokumentation, libgcc-s1 nur libgcc_s (Unwinder/Laufzeithilfen) ohne libstdc++-Code."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-85091"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/zlib1g@1%3A1.3.dfsg%2Breally1.3.1-1%2Bb1"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Betrifft zlib 1.3.1.2 bis 1.3.2 (gz_vacate); Debian liefert 1.3.1. Zudem nutzt die Anwendung die gz*-Datei-API nicht (Python-Modul gzip arbeitet ueber zlib-Streams); gzwrite importiert nur dpkg-deb."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-27171"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/zlib1g@1%3A1.3.dfsg%2Breally1.3.1-1%2Bb1"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "crc32_combine64/crc32_combine_gen64: Kein Programm und keine Bibliothek im App-Abbild importiert crc32_combine* (geprueft per nm -D --undefined-only ueber alle ELF-Dateien des Abbilds, DECISIONS K14); CPython ruft die Funktion nicht auf."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-69720"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libtinfo6@6.5%2B20250216-2"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Betrifft das Programm infocmp (Paket ncurses-bin); ncurses-bin ist im App-Abbild entfernt, libtinfo6 enthaelt den Code nicht."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-6141"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libtinfo6@6.5%2B20250216-2"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Termcap-Parser (postprocess_termcap): libtinfo wird nur von bash/readline bei interaktiver Nutzung durch Betreiber geladen; die Anwendung nutzt ncurses nicht (das Python-Modul _curses ist ohne Bibliothek und wird nicht importiert)."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-54369"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libacl1@2.3.2-2%2Bb1"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Erfordert einen privilegierten Aufrufer, der von Angreifern kontrollierte Pfade verarbeitet. libacl nutzen im Abbild nur cp/mv/install/sed, die die Anwendung nicht ausfuehrt; der Container laeuft ohne root und ohne setuid-Programme."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-54370"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libacl1@2.3.2-2%2Bb1"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Erfordert einen privilegierten Aufrufer, der von Angreifern kontrollierte Pfade verarbeitet. libacl nutzen im Abbild nur cp/mv/install/sed, die die Anwendung nicht ausfuehrt; der Container laeuft ohne root und ohne setuid-Programme."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-54371"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libattr1@1%3A2.5.2-3"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Betrifft die Programme getfattr/setfattr (Paket attr); im Abbild nicht installiert, libattr1 enthaelt den Code nicht."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-42250"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libbz2-1.0@1.0.8-6"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Betrifft das Programm bzip2recover (Paket bzip2); im Abbild nicht installiert, libbz2 enthaelt den Code nicht."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-15059"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libsystemd0@257.13-1~deb13u1"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Betrifft den Dienst systemd-oomd; im Abbild laeuft kein systemd, libsystemd0 ist nur die Client-Bibliothek (von coreutils gelinkt)."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-16742"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libsystemd0@257.13-1~deb13u1"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Betrifft den Dienst systemd-homed; im Abbild laeuft kein systemd, libsystemd0 ist nur die Client-Bibliothek (von coreutils gelinkt)."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-40228"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libsystemd0@257.13-1~deb13u1"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Betrifft den Dienst systemd-journald; im Abbild laeuft kein systemd, libsystemd0 ist nur die Client-Bibliothek (von coreutils gelinkt)."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-15366"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/python@3.12.16"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "imaplib: weder die Anwendung noch eine Laufzeitabhaengigkeit importiert imaplib (geprueft im venv)."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-15367"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/python@3.12.16"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "poplib: weder die Anwendung noch eine Laufzeitabhaengigkeit importiert poplib (geprueft im venv)."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-6019"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/python@3.12.16"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "http.cookies.Morsel.js_output: wird von der Anwendung und ihren Abhaengigkeiten nicht aufgerufen (geprueft im venv)."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-103995"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/python@3.12.16"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "http.client (Chunk-Parsing von Antworten): Die Anwendung ist HTTP-Server; als Client nutzt sie http.client nur fuer den optionalen, standardmaessig abgeschalteten Stammdaten-Abruf (MASTER_API_URL, nur https:// mit Zertifikatspruefung, vom Betreiber konfigurierter Endpunkt) und fuer den Docker-Healthcheck (feste URL http://127.0.0.1:<Port>/healthz, Antwort der eigenen Anwendung). Weiterleitungen folgt der Stammdaten-Abruf nur auf https:// mit demselben Host und Port; jede andere Weiterleitung bricht vor einer Anfrage an das neue Ziel ab (npt.masterdata.api.SameOriginRedirectHandler), sodass nur der konfigurierte Endpunkt Antworten liefert, nie ein Dritter."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-12781"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/python@3.12.16"
+        }
+      ],
+      "status": "affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "action_statement": "Behoben erst in CPython 3.13+; Wechsel der Python-Linie (3.12 -> 3.13) als eigener Schritt. Bis dahin offen im Bericht.",
+      "status_notes": "base64-Dekodierung ist in mehreren Abhaengigkeiten erreichbar (u. a. python-multipart, cryptography); eine Nichtbetroffenheit ist nicht belegbar."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-3446"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/python@3.12.16"
+        }
+      ],
+      "status": "affected",
+      "timestamp": "2026-11-02T00:00:00Z",
+      "action_statement": "Behoben erst in CPython 3.13+; Wechsel der Python-Linie (3.12 -> 3.13) als eigener Schritt. Bis dahin offen im Bericht.",
+      "status_notes": "base64-Dekodierung ist in mehreren Abhaengigkeiten erreichbar (u. a. python-multipart, cryptography); eine Nichtbetroffenheit ist nicht belegbar."
+    }
+  ]
+}

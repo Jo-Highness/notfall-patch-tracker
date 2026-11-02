@@ -364,7 +364,9 @@ scripts/sbom.sh [--scan]       # CycloneDX-1.6-SBOMs (Quellbaum, App-, Gateway-A
 scripts/check-licenses.sh      # Lizenzen der Python-Laufzeitabhängigkeiten (Befund bei GPL/AGPL)
 ```
 
-Details, Release-Artefakte und optionale cosign-Attestierung: [docs/SBOM.md](docs/SBOM.md).
+`--scan` gleicht die SBOMs mit grype ab und berücksichtigt dabei die Bewertungen nicht
+behebbarer Befunde in `vex/notfall-patch-tracker.openvex.json` (OpenVEX). Details,
+Release-Artefakte und optionale cosign-Attestierung: [docs/SBOM.md](docs/SBOM.md).
 
 ## Mitwirken
 

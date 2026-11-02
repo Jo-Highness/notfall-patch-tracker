@@ -1,5 +1,41 @@
 # Änderungen
 
+## 0.2.1 – 2026-11-02
+
+Sicherheitsnachtrag: Befunde aus dem SBOM-Schwachstellenabgleich beseitigt
+(`docs/DECISIONS.md` K14).
+
+### Geändert
+- **App-Abbild auf Debian 13** (`python:3.12.16-slim-trixie`, per Digest). Die
+  Laufzeitstufe enthält keine ungenutzten Debian-Pakete mehr (u. a. util-linux, PAM,
+  ncurses-Programme, SQLite, apt, debconf, perl, tar); ein Bauschritt prüft, dass alle
+  verbleibenden Programme und Module ihre Bibliotheken finden. Damit keine kritischen und
+  hohen Befunde mehr im App-Abbild (vorher 3 kritische, 57 hohe).
+- **Quill-Editor mit aktueller lodash-es-Version neu gebündelt** (4.18.1 statt 4.17.21,
+  reproduzierbar mit `scripts/vendor-quill/build.sh`); Verhalten unverändert. Die SBOM
+  nennt die gebündelten Pakete jetzt exakt, einschließlich der bisher fehlenden
+  fast-diff, lodash.clonedeep und lodash.isequal.
+- Weitere ungenutzte Pakete aus apt und PAM entfernt (u. a. sqv, nettle, seccomp,
+  SELinux-Verwaltung, audit). Der Bau bricht ab, wenn ein zu entfernendes Paket fehlt
+  (z. B. nach einem neuen Basisabbild umbenannt) oder der verbleibende Paketstand von
+  `scripts/runtime-packages.txt` abweicht.
+- **Stammdaten-API-Abruf folgt Weiterleitungen nur noch auf `https://` mit demselben Host
+  und Port**; andere Weiterleitungen brechen ab, der Token wird nie an ein anderes Ziel
+  gesendet.
+- **Docker-Healthcheck rollenabhängig** (`python -m npt.probe --docker`): Container mit
+  `APP_ROLE` ohne `public` (z. B. `admin,jobs`) werden jetzt „healthy“; mit `public` bzw.
+  `all` wie bisher `/healthz`.
+- **VEX-Bewertung** nicht behebbarer Befunde (`vex/notfall-patch-tracker.openvex.json`,
+  OpenVEX) mit Begründung je Befund; `scripts/sbom.sh --scan` berücksichtigt sie, der
+  Bericht zeigt nur noch offene Befunde und meldet veraltete Bewertungen.
+
+### Hinweise zum Update
+- Das Python-Modul `ssl` nutzt jetzt OpenSSL 3.5 (vorher 3.0). Sehr alte SMTP-Server bzw.
+  Gegenstellen mit schwachen Zertifikaten oder Altprotokollen können abgewiesen werden;
+  nach dem Update eine Testmail senden. Die Datenbank-Verbindung ist nicht betroffen.
+- Im App-Abbild gibt es keinen Paketmanager mehr (`apt-get`, `dpkg`-Installation). Eigene
+  Erweiterungen setzen auf dem Basisabbild auf.
+
 ## 0.2.0 – 2026-11-02
 
 Erste öffentliche Fassung.

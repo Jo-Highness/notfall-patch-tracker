@@ -1,0 +1,51 @@
+# Erwarteter Debian-Paketstand des App-Abbilds nach dem Entfernen ungenutzter Pakete
+# (Dockerfile, scripts/purge-runtime-packages.sh, DECISIONS K14). Der Bau bricht ab, wenn
+# das Abbild davon abweicht – nach einem neuen Basis-Digest neue/umbenannte Pakete bewerten.
+# Ein Paket je Zeile, ohne Version.
+base-files
+base-passwd
+bash
+ca-certificates
+coreutils
+dash
+debianutils
+diffutils
+dpkg
+findutils
+gcc-14-base
+grep
+gzip
+hostname
+init-system-helpers
+libacl1
+libattr1
+libbz2-1.0
+libc-bin
+libc6
+libcap2
+libcrypt1
+libdb5.3t64
+libdebconfclient0
+libffi8
+libgcc-s1
+libgdbm6t64
+libgmp10
+liblzma5
+libmd0
+libpcre2-8-0
+libreadline8t64
+libselinux1
+libssl3t64
+libsystemd0
+libtinfo6
+libzstd1
+mawk
+netbase
+openssl
+openssl-provider-legacy
+readline-common
+sed
+sysvinit-utils
+tini
+tzdata
+zlib1g

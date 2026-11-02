@@ -38,6 +38,40 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _bundled_component(parent: Json, b: Json, rebuilt: Json | None, lock: Json) -> Json:
+    """Unterkomponente fuer ein im Bundle von ``parent`` enthaltenes npm-Paket."""
+    purl = f"pkg:npm/{b['name']}@{b['version']}"
+    comp: Json = {
+        "bom-ref": f"{purl}#bundled-in-{parent['name']}",
+        "type": "library",
+        "name": b["name"],
+        "version": b["version"],
+        "licenses": [{"license": {"id": b["license"]}}],
+        "purl": purl,
+    }
+    if rebuilt:
+        # Neubau: Version exakt laut Lockfile, Hash = Registry-Integrity des Pakets.
+        entry = lock.get(f"node_modules/{b['name']}", {})
+        if entry.get("version") != b["version"]:
+            found = entry.get("version")
+            raise SystemExit(f"{rebuilt['lockfile']}: {b['name']} {found} statt {b['version']}")
+        alg, _, b64 = entry["integrity"].partition("-")
+        if alg != "sha512":
+            raise SystemExit(f"{rebuilt['lockfile']}: {b['name']} ohne sha512-Integrity")
+        comp["hashes"] = [{"alg": "SHA-512", "content": base64.b64decode(b64).hex()}]
+        basis = "lockfile"
+    else:
+        # Gebuendelt im Distributions-Build; die Version ist aus der Datei nicht
+        # ablesbar und abgeleitet (Herleitung: _hinweis_bundled in sbom-components.json).
+        basis = "abgeleitet"
+    comp["properties"] = [
+        {"name": "npt:bundled-in", "value": parent["purl"]},
+        {"name": "npt:version-range", "value": b["range"]},
+        {"name": "npt:version-basis", "value": basis},
+    ]
+    return comp
+
+
 def vendor_components(spec: Json, root: Path) -> list[Json]:
     """Baut CycloneDX-Komponenten fuer die vendorten Bibliotheken und prueft sie."""
     out: list[Json] = []
@@ -78,26 +112,16 @@ def vendor_components(spec: Json, root: Path) -> list[Json]:
             "evidence": {"occurrences": occurrences},
             "properties": [{"name": "npt:vendored", "value": "true"}, *props],
         }
-        bundled = []
-        for b in c["bundled"]:
-            # Gebuendelt im Distributions-Build; die Version ist aus der Datei nicht
-            # ablesbar und abgeleitet (Herleitung: _hinweis_bundled in sbom-components.json).
-            purl = f"pkg:npm/{b['name']}@{b['version']}"
-            bundled.append(
-                {
-                    "bom-ref": f"{purl}#bundled-in-{c['name']}",
-                    "type": "library",
-                    "name": b["name"],
-                    "version": b["version"],
-                    "licenses": [{"license": {"id": b["license"]}}],
-                    "purl": purl,
-                    "properties": [
-                        {"name": "npt:bundled-in", "value": c["purl"]},
-                        {"name": "npt:version-range", "value": b["range"]},
-                        {"name": "npt:version-basis", "value": "abgeleitet"},
-                    ],
-                }
-            )
+        rebuilt = c.get("rebuilt")
+        lock: Json = {}
+        if rebuilt:
+            # Neubau per Rezept (K14): exakte Versionen und Integrity aus dessen Lockfile.
+            lock = json.loads((root / rebuilt["lockfile"]).read_text(encoding="utf-8"))["packages"]
+            if lock.get(f"node_modules/{c['name']}", {}).get("version") != c["version"]:
+                raise SystemExit(f"{rebuilt['lockfile']}: {c['name']} {c['version']} fehlt")
+            comp["pedigree"] = {"notes": rebuilt["notes"]}
+            comp["properties"].append({"name": "npt:rebuilt-recipe", "value": rebuilt["recipe"]})
+        bundled = [_bundled_component(c, b, rebuilt, lock) for b in c["bundled"]]
         if bundled:
             comp["components"] = bundled
         out.append(comp)

@@ -1194,7 +1194,8 @@ false`. NetworkPolicies: Default-Deny, Freigaben für Controller → 8000, admin
 Registry/Repository/Tag/Digest per Values, nie `latest` (Template-Abbruch und Schema);
 `deploy/helm/deploy.sh` gleicht nach dem Rollout je Pod das laufende Abbild ab.
 Basisabbilder per Digest (C8): `nginx:1.31.8-alpine@sha256:7858…0606` für Gateway und
-`public-tls` (`tls-proxy/Dockerfile`), `python:3.12.16-slim-bookworm@sha256:e697…d337` für die App.
+`public-tls` (`tls-proxy/Dockerfile`), `python:3.12.16-slim-bookworm@sha256:e697…d337` für die App
+(seit 0.2.1 `python:3.12.16-slim-trixie@sha256:b18b…1ab30`, K14).
 
 ### K10 Sicherheitsbefund SBOM-Scan: Basisabbilder
 grype (SBOM-Abgleich `scripts/sbom.sh --scan`) meldete für das Gateway-Abbild (nginx
@@ -1211,7 +1212,7 @@ KEV-gelistete Lücke in `brotli-libs`; das App-Abbild (Python 3.12.15) 4 Critica
 - **App:** Python 3.12.16 per Digest: **3 Critical / 57 High / 106 Medium / 15 Low / 87
   Negligible**; die 3 Critical sind Debian-12-Pakete mit „won't fix“ (glibc CVE-2026-5450,
   SQLite CVE-2025-7458), behebbar nur per Wechsel auf Debian 13 (trixie) – bewusst nicht
-  in diesem Schritt. Verbleibende behebbare Python-Befunde sind nur in 3.13+ behoben.
+  in diesem Schritt (umgesetzt in K14). Verbleibende behebbare Python-Befunde sind nur in 3.13+ behoben.
 - **Quellbaum:** unverändert 1 High / 2 Medium / 1 Low (lodash-es in Quill, Quill selbst).
   Bewertung: Quill 2.0.3 bündelt aus lodash-es nur `cloneDeep`, `isEqual` und `merge`
   (die Bundle-Datei enthält weder `_.template` noch `_.unset`/`_.omit`; geprüft per Suche
@@ -1221,7 +1222,7 @@ KEV-gelistete Lücke in `brotli-libs`; das App-Abbild (Python 3.12.15) 4 Critica
   nicht erreichbar. GHSA-v3m3-f69x-jf25 (Quill, XSS im HTML-Export `getSemanticHTML`):
   nur im Admin-Mail-Editor genutzt, das Ergebnis landet in einem Formularfeld (nicht im
   DOM) und wird serverseitig mit nh3 bereinigt; CSP ohne Inline-Skripte. Kein
-  Quill-Upgrade.
+  Quill-Upgrade. (Seit K14: Quill mit lodash-es 4.18.1 neu gebaut, Bewertungen als VEX.)
 - **Restrisiko `public-tls`:** Das optionale TLS-Overlay (J14) nutzte das offizielle
   nginx-Abbild unverändert (nur Konfiguration gemountet) und behielt die 15 Critical /
   34 High der ungenutzten Pakete. Behoben in K13 (eigenes Abbild, 0 Critical / 0 High).
@@ -1322,3 +1323,193 @@ v4.3.1, kubectl v1.37.2, kubeconform v0.8.0), danach Cluster gelöscht. Alle Pun
   grype v0.121.1 (SBOM-Weg wie `scripts/sbom.sh`): offizielles Abbild 15 Critical / 34 High
   / 3 Medium (1 KEV, `brotli-libs`), neues Abbild **0 Critical / 0 High / 3 Medium**
   (BusyBox CVE-2025-60876, kein Fix verfügbar – wie beim Gateway).
+
+### K14 Schwachstellen-Befunde des SBOM-Scans beseitigt (0.2.1, 2026-11-02)
+Anlass: Auftrag des Betreibers, die Befunde aus `scripts/sbom.sh --scan` (Stand 0.2.0, K10)
+möglichst zu beheben statt nur zu dokumentieren und den Rest maschinenlesbar zu bewerten.
+Alle Zahlen: grype v0.121.1 über die SBOMs von `scripts/sbom.sh`, Datenbank vom 2026-11-02,
+Reihenfolge Critical / High / Medium / Low (Negligible getrennt).
+
+| SBOM | 0.2.0 | 0.2.1 ohne VEX | 0.2.1 mit VEX (Bericht) | per VEX bewertet |
+|---|---|---|---|---|
+| App-Abbild | 3 / 57 / 106 / 15, 87 Negl. | 0 / 14 / 35 / 8, 26 Negl. | 0 / 0 / 2 / 0, 26 Negl. | 55 |
+| Gateway-Abbild | 0 / 0 / 3 / 0 | 0 / 0 / 3 / 0 | 0 / 0 / 0 / 0 | 3 |
+| TLS-Proxy-Abbild | 0 / 0 / 3 / 0 | 0 / 0 / 3 / 0 | 0 / 0 / 0 / 0 | 3 |
+| Quellbaum | 0 / 1 / 2 / 1 | 0 / 0 / 0 / 1 | 0 / 0 / 0 / 0 | 1 |
+
+**App: Debian 13.** Basis `python:3.12.16-slim-trixie@sha256:b18b261e…1ab30` (neueste
+3.12-Patchversion, Docker Hub 2026-11-02) für App, Test-Stufe, Lasttest-Abbild und die
+Werkzeug-Container in `scripts/sbom.sh`/`scripts/check-licenses.sh` (`scripts/audit-deps.sh`
+nutzt unverändert das uv-Abbild, dort spielt die Distribution keine Rolle). Der Wechsel allein
+ergab 0 / 60 / 68 / 12 (47 Negl.): die Critical (glibc, SQLite) sind weg, die High-Zahl stieg
+aber, weil util-linux 2.41 in neun Binärpaketen je vier neue „won't fix“-Befunde hat. Kein
+verbleibender Befund hatte eine Fix-Version; `apt-get upgrade` hätte nur `tzdata` (2026e →
+2026f) aktualisiert und bleibt deshalb weg (Bau reproduzierbar wie bisher).
+
+**Paket-Entfernung in der Laufzeitstufe** (`Dockerfile`): Die Laufzeit führt nur CPython und
+tini aus; gebraucht werden daneben tzdata (`zoneinfo`), ca-certificates (SMTP/HTTPS) und die
+von CPython bzw. den Wheels gelinkten Bibliotheken. Entfernt wird, was weder ausgeführt noch
+gelinkt wird: util-linux, mount, login, bsdutils samt libmount1/libblkid1/libsmartcols1/
+liblastlog2-2/libuuid1, passwd/login.defs/PAM (nach dem Anlegen des Benutzers),
+ncurses-bin/ncurses-base/libncursesw6, libsqlite3-0, libstdc++6 (nur von apt genutzt),
+apt/libapt-pkg7.0/libudev1, adduser, debconf, perl-base, tar; seit der QA-Nacharbeit (unten)
+außerdem die apt-/PAM-Reste sqv, libnettle8t64, libhogweed6t64, debian-archive-keyring,
+libseccomp2, liblz4-1, libxxhash0, libsemanage2/-common, libsepol2, libaudit1/-common,
+libcap-ng0, libbsd0 und `/etc/security`.
+- `dpkg --purge --force-remove-essential --force-remove-protected --force-depends` statt
+  `apt-get purge`: der apt-Resolver verweigert das Entfernen essentieller Pakete
+  („generated breaks“). Zwei Aufrufe, weil dpkg die Reihenfolge innerhalb eines Aufrufs
+  selbst wählt: die PAM-`postrm` brauchen noch debconf, dpkg selbst braucht tar.
+- Folge: **kein Paketmanager mehr im Abbild** (die dpkg-Datenbank bleibt für SBOM und Scanner,
+  dpkg ist ohne tar nicht nutzbar). Wer Pakete ergänzen will, setzt auf dem Basisabbild auf.
+  Für die Fehlersuche bleiben dash, bash, coreutils, grep, sed, findutils.
+- Ohne Bibliothek (bewusst): Python-Module `_sqlite3` (Anwendung nutzt PostgreSQL),
+  `_curses`/`_curses_panel` und `_uuid` (`uuid` fällt auf die reine Python-Umsetzung zurück,
+  geprüft: `uuid4()`/`uuid1()` funktionieren); `_tkinter` war im slim-Abbild schon ohne Tk.
+- **Prüfung beim Bau:** `scripts/check-runtime-libs.sh` läuft per Bind-Mount (landet nicht im
+  Abbild) und prüft mit `ldd` jede dynamisch gelinkte Datei unter `/usr/bin`, `/usr/sbin`,
+  `/usr/lib`, `/usr/local` und danach `/opt/venv`; fehlt eine Bibliothek außerhalb der
+  Ausnahmen, bricht der Bau ab (Gegenprobe: ohne Ausnahme für `_sqlite3` meldet es den
+  Fehler). Zusätzlich eine Import-Probe (ssl, zlib, bz2, lzma, ctypes, hashlib, uuid,
+  zoneinfo `Europe/Berlin`, App-Module).
+- Benutzer-Shell `/bin/false` statt `/usr/sbin/nologin` (gehörte zum entfernten Paket login).
+- Ergebnis: 0 / 14 / 35 / 8 (26 Negl.). Verworfen: libc-bin entfernen (ldconfig/ldd;
+  `ctypes.util.find_library` nutzt `ldconfig -p`; hätte nur die doppelt gezählten
+  glibc-Zeilen halbiert, libc6 bleibt), bash/libtinfo6 (Fehlersuche, readline),
+  coreutils/libacl1/libattr1 (Grundwerkzeuge), ein distroless-Abbild (bringt Debians
+  Python 3.13 statt der gepinnten 3.12-Linie).
+
+**Verhaltensänderungen durch Debian 13** (für den Betrieb relevant):
+- Das Python-Modul `ssl` linkt jetzt **OpenSSL 3.5.7 statt 3.0.22** (glibc 2.41 statt 2.36).
+  Betroffen sind die TLS-Verbindungen zum SMTP-Server und zur optionalen Stammdaten-API:
+  sehr alte Gegenstellen (z. B. Zertifikate mit schwachen Schlüsseln/Signaturen, nur
+  Altprotokolle) können abgewiesen werden. Die Datenbank-Verbindung ist nicht betroffen
+  (psycopg-binary bringt eigenes libssl mit). Mindest-TLS-Version unverändert (TLS 1.2).
+- `import sqlite3` schlägt im Laufzeitabbild fehl; kein `apt-get`/`perl`/`tar` mehr
+  (`docker exec … sh` funktioniert weiter).
+- Python, tini (0.19.0) und alle Python-Pakete sind unverändert.
+
+**Python-Pakete:** pip-audit 2.10.1 (`scripts/audit-deps.sh`) meldet für beide Locks keine
+Befunde, grype ebenfalls keine PyPI-Befunde – `requirements.lock` bleibt unverändert. Die
+Befunde zu CPython 3.12.16 selbst sind nur in 3.13+ behoben.
+
+**Quill/lodash-es: Neubau.** In der npm-Registry gibt es kein Quill nach 2.0.3 (Stand
+2026-11-02). `scripts/vendor-quill/build.sh` bündelt die ESM-Quellen des npm-Pakets quill
+2.0.3 (dieselbe Registry-Integrity wie bisher) mit esbuild 0.28.2 in
+`node:22.23.4-alpine` (per Digest) neu: `npm ci --ignore-scripts` aus
+`scripts/vendor-quill/package-lock.json` (Integrity je Paket), Versionen exakt in
+`package.json`, lodash-es per `overrides` auf **4.18.1**; die übrigen gebündelten Pakete in
+den bisher abgeleiteten Versionen (parchment 3.0.0, quill-delta 5.1.0, eventemitter3 5.0.1)
+plus die bisher in der SBOM fehlenden quill-delta-Abhängigkeiten fast-diff 1.3.0
+(Apache-2.0), lodash.clonedeep 4.5.0, lodash.isequal 4.5.0. Ausgabe: IIFE mit
+`window.Quill`, Ziel ES2020, minifiziert (205 statt 209 KB); `quill.snow.css` und `LICENSE`
+byte-gleich übernommen; `quill.js.LICENSE.txt` enthält jetzt die Lizenztexte aller
+gebündelten Pakete (vorher nur den Quill-Banner).
+- Zwischen lodash-es 4.17.21 und 4.18.1 unterscheiden sich in den von Quill genutzten
+  Funktionen (`cloneDeep`, `isEqual`, `merge` samt Hilfsmodulen) nur Kommentare; geändert
+  wurden u. a. `template`, `_baseUnset`, `_baseOrderBy`, `compact`, `fromPairs`, `random`.
+- Reproduzierbar: zwei Läufe byteidentisch (`CHECK=1` vergleicht mit dem Baum).
+- Verhaltensvergleich Upstream-Bundle vs. Neubau in Chromium (Playwright, Wegwerf-Skript):
+  drei Editor-Konfigurationen (Mail-Editor wie `mail.js`, voller snow-Editor, bubble), sechs
+  HTML-Eingaben inkl. XSS-Proben → Delta, `getSemanticHTML`, DOM und Text; Formatieren,
+  Einfügen, Undo/Redo, Tastatureingabe (Fett, Listen-Autoformat), Toolbar-HTML und
+  `Quill.imports` – **identisch**, keine Konsolenfehler. Die E2E-Suite (`mail_smoke`) läuft
+  mit dem Neubau.
+- SBOM: gebündelte Pakete exakt (`npt:version-basis = lockfile`, SHA-512 aus dem Lockfile),
+  Quill mit `pedigree.notes` und `npt:rebuilt-recipe`; `scripts/sbom_finalize.py` prüft die
+  Versionen gegen das Lockfile.
+- Preis: `quill.min.js` ist jetzt ein eigenes Build-Artefakt statt der unveränderten
+  Upstream-Datei (Rezept und Lockfile im Repository). Verworfen: nur per VEX bewerten – der
+  verwundbare Code fehlte zwar schon im Upstream-Bundle (K10), der Scanner hätte aber weiter
+  eine verwundbare Version gesehen.
+
+**BusyBox CVE-2025-60876 (Gateway, TLS-Proxy):** nginx 1.31.8-alpine ist die neueste
+Version (`mainline-alpine`/`1-alpine` = gleicher Digest; `stable-alpine` 1.30.6 hat dieselbe
+Alpine-Basis). Alpine 3.24 liefert busybox 1.37.0-r31, die Alpine-secdb (v3.24 und edge)
+kennt keinen Fix; nur edge hat 1.38.0 – Pakete aus edge in ein stabiles Abbild zu mischen
+wurde verworfen. Bewertung per VEX: die Lücke betrifft BusyBox `wget` mit Steuerzeichen im
+Request-Target; `wget` läuft nur im Healthcheck bzw. in der Kubernetes-Probe mit fester URL
+auf 127.0.0.1, keine Komponente gibt externe Eingaben an `wget`/`ssl_client` weiter.
+
+**VEX** (`vex/notfall-patch-tracker.openvex.json`, 39 Aussagen):
+- **OpenVEX 0.2.0 statt CycloneDX-VEX**, weil grype `--vex` OpenVEX liest (CycloneDX-VEX
+  nicht als Eingabe). Produkte als purl **mit Version, ohne Qualifier** – so gleicht grype
+  ab (geprüft; ohne Version würde die Aussage auch künftige Versionen abdecken, mit
+  Qualifiern trifft sie nicht alle Binärpakete). Nach einem Paket-Update greift eine
+  Aussage nicht mehr: der Befund erscheint wieder im Bericht und ist neu zu bewerten;
+  `scripts/sbom.sh --scan` listet Aussagen ohne Treffer.
+- Status `not_affected` nur mit belegter Begründung: importierte Symbole aller ELF-Dateien
+  des App-Abbilds (`nm -D --undefined-only`, z. B. ruft niemand `strfmon`, `wordexp`,
+  `ns_printrr*`, `crc32_combine*` auf; `iconv_open` nur bash/diffutils/printf, `tdelete` nur
+  libtinfo), keine setuid/setgid-Dateien im Abbild (ld.so-Lücken mit AT_SECURE), Programm in
+  einem nicht installierten Paket (nscd, infocmp, getfattr, bzip2recover, systemd-Dienste,
+  libstdc++ entfernt), Versionsbereich (zlib CVE-2026-85091 erst ab 1.3.1.2), Suche im venv
+  (imaplib, poplib, `Morsel.js_output` ungenutzt), von außen nicht steuerbare Eingaben
+  (Umgebung, `resolv.conf`, fester Healthcheck-URL). Quill GHSA-v3m3-f69x-jf25:
+  `inline_mitigations_already_exist` (Ergebnis nur im Formularfeld, nh3-Allowlist
+  serverseitig, CSP).
+- **Offen bleiben** (Status `affected`, im Bericht sichtbar): CPython CVE-2025-12781 und
+  CVE-2026-3446 (base64-Dekodierung, in Abhängigkeiten erreichbar, Fix erst in 3.13+) und
+  die 26 Negligible-Befunde. Der Wechsel auf Python 3.13 ist ein eigener Schritt.
+- `scripts/sbom.sh --scan` schreibt je SBOM `*.grype.txt` (nur offene Befunde) und
+  `*.grype.json` (bewertete unter `ignoredMatches`), fasst je Bericht zusammen;
+  `GRYPE_FAIL_ON` wirkt nur auf offene Befunde. `NO_VEX=1` zeigt den Rohzustand.
+
+**Geprüft** (Testhost, Wegwerf-Abbilder und -Stacks): `ruff`/`ruff format`/`mypy` sauber,
+pytest 546 bestanden (1 übersprungen: Node-Vektoren laufen separat), JS 40/40,
+`scripts/run-e2e.sh` 5/5 Suiten, `scripts/mtls-integration-test.sh` 33/33 (gegen einen
+Wegwerf-Stack), `helm lint --strict` und `helm template | kubeconform -strict`,
+`scripts/check-licenses.sh` ok, Lasttest-Abbild baut (locust 2.47.0), `scripts/sbom.sh
+--scan` vorher/nachher (Tabelle oben).
+
+**Nacharbeit QA-Befunde (0.2.1, 2026-11-02):**
+- **Paketliste gegen stillen Rückfall gesichert** (66ba3c8e): `dpkg --purge` übergeht nicht
+  installierte Pakete ohne Fehler; nach einem neuen Basis-Digest mit umbenanntem Paket
+  (z. B. `libapt-pkg7.0`, `liblastlog2-2`) bliebe das neue Paket im Abbild, der Bau wäre
+  grün. Jetzt läuft die Entfernung über `scripts/purge-runtime-packages.sh` (Bind-Mount,
+  landet nicht im Abbild): (1) jedes Paket aus `NPT_PURGE_PACKAGES`/`NPT_PURGE_PACKAGES_LATE`
+  muss laut `dpkg-query` installiert sein, (2) danach muss der Paketstand exakt
+  `scripts/runtime-packages.txt` entsprechen (47 Pakete). Jede Abweichung bricht den Bau mit
+  den betroffenen Paketnamen und einem Hinweis auf die drei Listen ab. Gegenproben:
+  `libapt-pkg8.0` statt `libapt-pkg7.0` → „zu entfernende Pakete sind nicht installiert
+  (umbenannt oder entfallen?): libapt-pkg8.0“; `libseccomp2` aus der Liste genommen → „im
+  Abbild, aber nicht erwartet: libseccomp2“. Die Erwartungsliste fängt auch Pakete, die ein
+  neues Basisabbild zusätzlich mitbringt; sie ist bei jedem Digest-Wechsel zu bewerten.
+- **Weitere apt-/PAM-Reste entfernt** (42c0fb9d), geprüft per `dpkg-query` (Rückwärts-
+  abhängigkeiten unter den verbleibenden Paketen) und `ldd` über alle ELF-Dateien:
+  `sqv` (nur von apt aufgerufen) samt `libnettle8t64`/`libhogweed6t64` (nur von sqv
+  gelinkt), `debian-archive-keyring` (nur für apt), `libseccomp2` (nur apt, von nichts
+  gelinkt), `liblz4-1`/`libxxhash0` (nur libapt-pkg), `libsemanage2`/`libsemanage-common`/
+  `libsepol2`/`libaudit1`/`libaudit-common`/`libcap-ng0` (nur von passwd bzw. PAM
+  gebraucht, untereinander gelinkt), `libbsd0` (von nichts gelinkt). `/etc/security`
+  enthielt nur die leere, keinem Paket gehörende `opasswd` (PAM-Rest) und entfällt.
+  **Bleiben:** `libgmp10` (coreutils `expr`/`factor` linken es), `libdebconfclient0`
+  (von `update-passwd` aus base-passwd gelinkt; base-passwd ist essentiell und liefert die
+  Grundlage von `/etc/passwd`/`/etc/group`, Entfernen hätte ein Programm mit fehlender
+  Bibliothek hinterlassen, das `check-runtime-libs.sh` zu Recht beanstandet),
+  `libsystemd0`/`libcap2` (coreutils `who`/`users`/`pinky` bzw. `ls`), `libdb5.3t64`/
+  `libgdbm6t64` (Python-Module `_dbm`/`_gdbm`). Keine der entfernten Pakete hatte einen
+  grype-Befund; die Zahlen bleiben 0 / 14 / 35 / 8 (26 Negl.) ohne VEX und 0 / 0 / 2 / 0 mit
+  VEX, alle 39 VEX-Aussagen haben weiter Treffer (keine gegenstandslos). Außerdem doppelte
+  Verneinung in den VEX-Begründungen zu CVE-2026-5435/CVE-2026-6238 korrigiert.
+- **Weiterleitungen beim Stammdaten-Abruf** (8614a039): `urlopen` folgte Weiterleitungen
+  auch auf `http://` und zu fremden Hosts und reichte dabei den Bearer-Token weiter.
+  `npt.masterdata.api.open_api` setzt den Token jetzt als nicht weitergeleiteten Header
+  (`add_unredirected_header`) und folgt Weiterleitungen nur auf `https://` mit demselben
+  Host und Port (`SameOriginRedirectHandler`, Token dann neu gesetzt); jede andere
+  Weiterleitung bricht mit `MasterDataError` ab, bevor eine Anfrage an das neue Ziel geht
+  (Ziel-URL nicht in der Meldung). Verworfen: Weiterleitungen ganz abschalten – ein
+  Pfadwechsel auf demselben Server (z. B. API-Versionen) wäre ohne Sicherheitsgewinn
+  gescheitert. VEX-Begründung zu CVE-2026-103995 entsprechend präzisiert.
+- **Docker-HEALTHCHECK rollenabhängig:** Bisher prüfte das Abbild immer
+  `:8000/healthz`; mit `APP_ROLE` ohne `public` (z. B. `admin,jobs`) blieb der Container
+  „starting“/„unhealthy“. Jetzt `python -m npt.probe --docker`: mit `public` (auch `all`,
+  Compose-Default) unverändert nur `GET 127.0.0.1:PUBLIC_LISTEN_PORT/healthz` = 200 (ohne
+  Proxy-Umgebung), sonst die Prüfungen der Kubernetes-Probe (Admin-Port per TCP,
+  Jobs-Heartbeat falls `JOBS_HEARTBEAT_FILE` gesetzt). `python -m npt.probe` ohne Option
+  (Kubernetes) ist unverändert.
+- **Geprüft** (Testhost): ruff/ruff format/mypy sauber, pytest 557 bestanden
+  (1 übersprungen), `scripts/run-e2e.sh` 5/5 Suiten, Healthcheck im E2E-Stack mit
+  `APP_ROLE=all`, `admin,jobs` und `public` jeweils „healthy“, `docker build --no-cache` der
+  Laufzeitstufe grün inkl. der beiden Gegenproben oben, `scripts/sbom.sh --scan` mit und
+  ohne VEX (Zahlen wie in der Tabelle, keine VEX-Aussage ohne Treffer).

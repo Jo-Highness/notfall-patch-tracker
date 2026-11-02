@@ -26,8 +26,9 @@ Host wird nichts installiert.
 export NPT_REVISION="$(git rev-parse HEAD)"
 docker compose build
 scripts/sbom.sh                      # alle SBOMs nach ./sbom, mit Schema-Prüfung
-scripts/sbom.sh --scan               # zusätzlich grype-Abgleich -> sbom/*.grype.txt
-GRYPE_FAIL_ON=high scripts/sbom.sh --scan   # Exitcode != 0 ab Schweregrad high
+scripts/sbom.sh --scan               # zusätzlich grype-Abgleich mit VEX -> sbom/*.grype.{txt,json}
+GRYPE_FAIL_ON=high scripts/sbom.sh --scan   # Exitcode != 0 ab Schweregrad high (offene Befunde)
+NO_VEX=1 scripts/sbom.sh --scan      # Rohzustand ohne VEX-Bewertung
 SKIP_IMAGES=1 scripts/sbom.sh        # nur Quellbaum, ohne gebaute Abbilder
 APP_IMAGE=notfall-patch-tracker:1.2.0 GATEWAY_IMAGE=notfall-patch-tracker-gateway:1.2.0 scripts/sbom.sh
 ```
@@ -45,9 +46,14 @@ Ablauf (`scripts/sbom.sh`):
    SHA-256 je Datei, Fundstelle und SHA-512 des npm-Pakets ergänzt. Das Skript bricht ab,
    wenn Version oder Prüfsummen nicht zur `VERSION`-Datei im Vendor-Verzeichnis passen –
    ein Update der Bibliothek ohne SBOM-Anpassung fällt also auf. In Quill gebündelte
-   Pakete (parchment, quill-delta, eventemitter3, lodash-es) sind als Unterkomponenten
-   enthalten; ihre Version ist abgeleitet (Property `npt:version-basis`), der deklarierte
-   Bereich steht in `npt:version-range`.
+   Pakete (parchment, quill-delta, eventemitter3, fast-diff, lodash.clonedeep,
+   lodash.isequal, lodash-es) sind als Unterkomponenten enthalten. Das Quill-Bundle wird
+   seit 0.2.1 mit `scripts/vendor-quill/build.sh` reproduzierbar neu gebaut (lodash-es
+   4.18.1, DECISIONS K14); die Versionen der Unterkomponenten stammen deshalb exakt aus
+   `scripts/vendor-quill/package-lock.json` (Property `npt:version-basis = lockfile`,
+   SHA-512 der Registry), `sbom_finalize.py` prüft sie gegen das Lockfile. Quill trägt
+   `pedigree.notes` und `npt:rebuilt-recipe`. Der deklarierte Bereich steht in
+   `npt:version-range`.
 3. **Abbilder:** `docker save` → Syft liest das Archiv (`docker-archive:`); der
    Werkzeug-Container bekommt keinen Docker-Socket.
 4. **Lizenzen:** Die Requirements-Datei enthält keine Lizenzen; sie werden aus der
@@ -78,15 +84,16 @@ docker image inspect notfall-patch-tracker:latest --format '{{json .Config.Label
 
 ## Als Release-Artefakt veröffentlichen
 
-Beim Release (Tag `vX.Y.Z`) die `*.cdx.json` an das Release hängen, z. B. mit der
-GitHub-CLI:
+Beim Release (Tag `vX.Y.Z`) die `*.cdx.json` und das VEX-Dokument an das Release hängen,
+z. B. mit der GitHub-CLI:
 
 ```bash
-gh release create v0.2.0 --notes-file CHANGELOG-0.2.0.md \
-  sbom/notfall-patch-tracker-0.2.0-source.cdx.json \
-  sbom/notfall-patch-tracker-0.2.0-app.cdx.json \
-  sbom/notfall-patch-tracker-0.2.0-gateway.cdx.json \
-  sbom/notfall-patch-tracker-0.2.0-tls-proxy.cdx.json
+gh release create v0.2.1 --notes-file CHANGELOG-0.2.1.md \
+  sbom/notfall-patch-tracker-0.2.1-source.cdx.json \
+  sbom/notfall-patch-tracker-0.2.1-app.cdx.json \
+  sbom/notfall-patch-tracker-0.2.1-gateway.cdx.json \
+  sbom/notfall-patch-tracker-0.2.1-tls-proxy.cdx.json \
+  vex/notfall-patch-tracker.openvex.json
 ```
 
 Werden die Abbilder in eine Registry veröffentlicht, sollte die SBOM aus genau dem
@@ -101,7 +108,7 @@ an das Abbild in der Registry binden (Schlüssel aus dem eigenen Secret-Store, n
 ```bash
 IMG=ghcr.io/<owner>/notfall-patch-tracker@sha256:<digest>
 cosign attest --yes --key cosign.key --type cyclonedx \
-  --predicate sbom/notfall-patch-tracker-0.2.0-app.cdx.json "$IMG"
+  --predicate sbom/notfall-patch-tracker-0.2.1-app.cdx.json "$IMG"
 cosign verify-attestation --key cosign.pub --type cyclonedx "$IMG"
 ```
 
@@ -110,13 +117,40 @@ Das Beispiel ist im Projekt nicht ausgeführt worden (es gibt noch keine Registr
 gedacht für cosign v3 (Container `ghcr.io/sigstore/cosign/cosign:v3.1.4`), Optionen vor
 dem ersten Einsatz mit `cosign attest --help` abgleichen.
 
-## Schwachstellen-Abgleich und Lizenzprüfung
+## Schwachstellen-Abgleich, VEX und Lizenzprüfung
 
 - `scripts/sbom.sh --scan` gleicht alle SBOMs mit grype ab (Datenbank-Cache unter
-  `~/.cache/npt-grype`). Befunde der Basisabbilder werden durch Aktualisieren der
-  per Digest gepinnten Basisabbilder behoben (`Dockerfile`, `gateway/Dockerfile`,
-  `tls-proxy/Dockerfile`); Gateway und TLS-Proxy entfernen zusätzlich ungenutzte
-  nginx-Module und curl. Stand und Bewertung der Befunde (inkl. lodash-es in Quill): `docs/DECISIONS.md` K10.
+  `~/.cache/npt-grype`) und übergibt dabei das VEX-Dokument
+  `vex/notfall-patch-tracker.openvex.json` (`grype --vex`). Je SBOM entstehen
+  `*.grype.txt` (Tabelle **nur mit offenen Befunden**) und `*.grype.json` (zusätzlich die
+  per VEX bewerteten unter `ignoredMatches`); am Ende steht je Bericht eine Zeile
+  „offen C / H / M / L; per VEX bewertet n“ und – falls vorhanden – die VEX-Aussagen
+  ohne Treffer. `GRYPE_FAIL_ON` wirkt nur auf offene Befunde.
+- **VEX** (OpenVEX 0.2.0, weil grype dieses Format als Eingabe liest): Je Aussage
+  Schwachstelle, betroffene Pakete als purl mit Version, Status und Begründung
+  (`justification` + `impact_statement`). Weil die purls versioniert sind, greift eine
+  Aussage nach einem Paket-Update nicht mehr – der Befund erscheint wieder und ist neu zu
+  bewerten; nicht mehr zutreffende Aussagen meldet `--scan` und sie werden entfernt. Bewertet
+  wird nur, was belegt ist (Methode und Einzelbegründungen: `docs/DECISIONS.md` K14);
+  Befunde mit Status `affected` bleiben im Bericht sichtbar. Das VEX-Dokument gehört wie
+  die SBOMs an das Release.
+- Behoben werden Befunde zuerst durch Aktualisieren der per Digest gepinnten Basisabbilder
+  (`Dockerfile`, `gateway/Dockerfile`, `tls-proxy/Dockerfile`) und durch Weglassen
+  ungenutzter Pakete (App-Laufzeitstufe ohne util-linux, apt, perl u. a.; Gateway und
+  TLS-Proxy ohne ungenutzte nginx-Module und curl), vendorte Bibliotheken durch Update bzw.
+  Neubau (Quill, `scripts/vendor-quill/build.sh`).
+- Stand 0.2.1 (grype v0.121.1, Datenbank 2026-11-02; Critical / High / Medium / Low):
+
+  | SBOM | ohne VEX | Bericht (mit VEX) | per VEX bewertet |
+  |---|---|---|---|
+  | App-Abbild | 0 / 14 / 35 / 8 (+ 26 Negligible) | 0 / 0 / 2 / 0 (+ 26 Negligible) | 55 |
+  | Gateway-Abbild | 0 / 0 / 3 / 0 | 0 / 0 / 0 / 0 | 3 |
+  | TLS-Proxy-Abbild | 0 / 0 / 3 / 0 | 0 / 0 / 0 / 0 | 3 |
+  | Quellbaum | 0 / 0 / 0 / 1 | 0 / 0 / 0 / 0 | 1 |
+
+  Offen sind zwei CPython-3.12-Befunde (base64-Dekodierung, behoben erst in 3.13+).
+  Zum Vergleich 0.2.0: App 3 / 57 / 106 / 15, Gateway und TLS-Proxy je 0 / 0 / 3 / 0,
+  Quellbaum 0 / 1 / 2 / 1 (K10).
 - `scripts/audit-deps.sh` (pip-audit) prüft die Python-Locks direkt gegen PyPI/OSV.
 - `scripts/check-licenses.sh` prüft die Lizenzen der Python-Laufzeitabhängigkeiten
   (Befund bei GPL/AGPL oder fehlender Angabe); Übersicht aller Drittlizenzen:

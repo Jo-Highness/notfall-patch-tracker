@@ -9,19 +9,21 @@
 # `docker save` als Archiv gelesen (kein Docker-Socket im Werkzeug-Container).
 #
 #   scripts/sbom.sh               alle SBOMs
-#   scripts/sbom.sh --scan        zusaetzlich Schwachstellen-Abgleich mit grype (*.grype.txt)
+#   scripts/sbom.sh --scan        zusaetzlich Schwachstellen-Abgleich mit grype (*.grype.txt/.json),
+#                                 bewertete Befunde aus dem VEX-Dokument ($VEX) unterdrueckt
 #   SKIP_IMAGES=1 scripts/sbom.sh nur Quellbaum (ohne gebaute Abbilder)
 #
 # Umgebung: APP_IMAGE / GATEWAY_IMAGE / TLS_PROXY_IMAGE (Default
 #   notfall-patch-tracker[-gateway|-tls-proxy]:$NPT_IMAGE_TAG, Tag-Default latest), SOURCE_DATE_EPOCH (Default: Zeit des letzten Commits),
 #   GRYPE_FAIL_ON (z. B. high: Exitcode != 0 ab diesem Schweregrad), OUT (Default ./sbom),
-#   NO_VALIDATE=1 (Schema-Pruefung mit cyclonedx-cli auslassen).
+#   NO_VALIDATE=1 (Schema-Pruefung mit cyclonedx-cli auslassen),
+#   VEX (Default vex/notfall-patch-tracker.openvex.json, OpenVEX, K14; NO_VEX=1 = ohne VEX).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SYFT_IMAGE="${SYFT_IMAGE:-anchore/syft:v1.56.0}"
 GRYPE_IMAGE="${GRYPE_IMAGE:-anchore/grype:v0.121.1}"
-PYTHON_IMAGE="${PYTHON_IMAGE:-python:3.12.16-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337}"
+PYTHON_IMAGE="${PYTHON_IMAGE:-python:3.12.16-slim-trixie@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da527dda1d031ab30}"
 CDX_CLI_IMAGE="${CDX_CLI_IMAGE:-cyclonedx/cyclonedx-cli:0.33.1}"
 TAG="${NPT_IMAGE_TAG:-latest}"
 APP_IMAGE="${APP_IMAGE:-notfall-patch-tracker:$TAG}"
@@ -110,15 +112,51 @@ fi
 if [[ "$SCAN" == 1 ]]; then
   CACHE="${GRYPE_CACHE_DIR:-$HOME/.cache/npt-grype}"
   mkdir -p "$CACHE"
+  VEX="${VEX:-vex/notfall-patch-tracker.openvex.json}"
+  VEX_ARGS=()
+  VEX_MOUNT=()
+  if [[ "${NO_VEX:-0}" != "1" ]]; then
+    [[ -f "$VEX" ]] || { echo "VEX-Dokument fehlt: $VEX (NO_VEX=1 zum Abschalten)" >&2; exit 1; }
+    VEX_MOUNT=(-v "$(cd "$(dirname "$VEX")" && pwd)/$(basename "$VEX"):/vex.json:ro")
+    VEX_ARGS=(--vex /vex.json)
+  fi
   rc=0
   for f in "$OUT"/"$NAME-$VERSION"-*.cdx.json; do
-    report="${f%.cdx.json}.grype.txt"
+    base="$(basename "${f%.cdx.json}")"
+    # Bericht (Tabelle) zeigt nur offene Befunde; per VEX unterdrueckte stehen im JSON
+    # unter ignoredMatches (mit Begruendung im VEX-Dokument).
     docker run --rm --user "$U" -e HOME=/cache -e TMPDIR=/cache -e GRYPE_DB_CACHE_DIR=/cache/db \
-      -e GRYPE_CHECK_FOR_APP_UPDATE=false -v "$CACHE:/cache" -v "$OUT_ABS:/sbom:ro" \
-      "$GRYPE_IMAGE" "sbom:/sbom/$(basename "$f")" -q -o table \
-      ${GRYPE_FAIL_ON:+--fail-on "$GRYPE_FAIL_ON"} > "$report" || rc=1
-    n="$(grep -c -v -E '^NAME |^No vulnerabilities' "$report" || true)"
-    echo "== $(basename "$f"): $n Treffer -> $report"
+      -e GRYPE_CHECK_FOR_APP_UPDATE=false -v "$CACHE:/cache" -v "$OUT_ABS:/sbom" "${VEX_MOUNT[@]}" \
+      "$GRYPE_IMAGE" "sbom:/sbom/$(basename "$f")" -q \
+      -o "table=/sbom/$base.grype.txt" -o "json=/sbom/$base.grype.json" "${VEX_ARGS[@]}" \
+      ${GRYPE_FAIL_ON:+--fail-on "$GRYPE_FAIL_ON"} || rc=1
   done
+  # Zusammenfassung je Bericht und VEX-Aussagen ohne Treffer (veraltet, z. B. nach einem
+  # Paket-Update: dann erscheint der Befund wieder und ist neu zu bewerten).
+  docker run --rm -i --network none --user "$U" -v "$OUT_ABS:/sbom:ro" "${VEX_MOUNT[@]}" \
+    "$PYTHON_IMAGE" python -I - "$NAME-$VERSION" <<'PY'
+import json, sys
+from pathlib import Path
+sev = ["Critical", "High", "Medium", "Low", "Negligible", "Unknown"]
+used = set()
+for f in sorted(Path("/sbom").glob(f"{sys.argv[1]}-*.grype.json")):
+    d = json.loads(f.read_text())
+    n = {s: 0 for s in sev}
+    for m in d.get("matches", []):
+        n[m["vulnerability"]["severity"]] = n.get(m["vulnerability"]["severity"], 0) + 1
+    ign = d.get("ignoredMatches", []) or []
+    for m in ign:
+        used.add(m["vulnerability"]["id"])
+        for r in m.get("relatedVulnerabilities", []) or []:
+            used.add(r["id"])
+    counts = " / ".join(f"{n[s]} {s}" for s in sev if n[s] or s in sev[:4])
+    print(f"== {f.name.removesuffix('.grype.json')}: offen {counts}; per VEX bewertet {len(ign)}")
+vex = Path("/vex.json")
+if vex.exists():
+    stale = [s["vulnerability"]["name"] for s in json.loads(vex.read_text())["statements"]
+             if s["status"] in ("not_affected", "fixed") and s["vulnerability"]["name"] not in used]
+    if stale:
+        print("VEX-Aussagen ohne Treffer (pruefen/entfernen): " + ", ".join(sorted(set(stale))))
+PY
   exit $rc
 fi

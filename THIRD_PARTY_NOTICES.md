@@ -6,26 +6,32 @@ nutzt die folgenden Komponenten Dritter unter deren eigenen Lizenzen. Maschinenl
 Die Lizenzprüfung der Python-Laufzeitabhängigkeiten ist automatisiert:
 `scripts/check-licenses.sh` (schlägt bei GPL/AGPL oder fehlender Lizenzangabe fehl).
 
-Stand: Version 0.2.0, `requirements.lock` und `src/npt/static/vendor` dieses Commits.
+Stand: Version 0.2.1, `requirements.lock` und `src/npt/static/vendor` dieses Commits.
 
 ## 1. Im Repository mitgelieferte Browser-Bibliotheken (`src/npt/static/vendor`)
 
-Unverändert aus dem npm-Registry-Paket übernommen (nur der `sourceMappingURL`-Kommentar
-entfernt); Herkunft und Prüfsummen in der jeweiligen `VERSION`-Datei, Lizenztext in der
-jeweiligen `LICENSE`-Datei daneben.
+Tabulator unverändert aus dem npm-Registry-Paket übernommen (nur der
+`sourceMappingURL`-Kommentar entfernt). Quill ist aus den Quellen des npm-Pakets
+quill 2.0.3 neu gebündelt (`scripts/vendor-quill/build.sh`, mit lodash-es 4.18.1 statt
+4.17.21; `quill.snow.css` unverändert). Herkunft und Prüfsummen in der jeweiligen
+`VERSION`-Datei, Lizenztext in der jeweiligen `LICENSE`-Datei daneben; die Lizenztexte aller
+in Quill gebündelten Pakete stehen in `quill.js.LICENSE.txt`.
 
 | Komponente | Version | Lizenz | Lizenztext |
 |---|---|---|---|
 | [Tabulator](https://tabulator.info) (`tabulator-tables`) | 6.7.1 | MIT | `src/npt/static/vendor/tabulator/LICENSE` |
 | [Quill](https://quilljs.com) | 2.0.3 | BSD-3-Clause | `src/npt/static/vendor/quill/LICENSE` |
-| ↳ gebündelt in Quill: parchment | 3.0.0 (`^3.0.0`) | BSD-3-Clause | `src/npt/static/vendor/quill/quill.js.LICENSE.txt` |
-| ↳ gebündelt in Quill: quill-delta | 5.1.0 (`^5.1.0`) | MIT | ebd. |
-| ↳ gebündelt in Quill: eventemitter3 | 5.0.1 (`^5.0.1`) | MIT | ebd. |
-| ↳ gebündelt in Quill: lodash-es | 4.17.21 (`^4.17.21`) | MIT | ebd. |
+| ↳ gebündelt in Quill: parchment | 3.0.0 | BSD-3-Clause | `src/npt/static/vendor/quill/quill.js.LICENSE.txt` |
+| ↳ gebündelt in Quill: quill-delta | 5.1.0 | MIT | ebd. |
+| ↳ gebündelt in Quill: eventemitter3 | 5.0.1 | MIT | ebd. |
+| ↳ gebündelt in Quill: fast-diff | 1.3.0 | Apache-2.0 | ebd. |
+| ↳ gebündelt in Quill: lodash.clonedeep | 4.5.0 | MIT | ebd. |
+| ↳ gebündelt in Quill: lodash.isequal | 4.5.0 | MIT | ebd. |
+| ↳ gebündelt in Quill: lodash-es | 4.18.1 | MIT | ebd. |
 
-Die Versionen der in Quill gebündelten Pakete lassen sich aus dem Distributions-Build nicht
-ablesen. Angegeben ist die neueste zum Bereich aus `quill@2.0.3/package.json` (in Klammern)
-passende Version am Veröffentlichungstag von Quill 2.0.3 (30.11.2024, laut npm-Registry).
+Die Versionen der in Quill gebündelten Pakete sind exakt die aus
+`scripts/vendor-quill/package-lock.json` (npm-Registry, Integrity je Paket geprüft).
+Nur zum Bau (nicht ausgeliefert): esbuild 0.28.2 (MIT) in `node:22.23.4-alpine`.
 
 ## 2. Python-Laufzeitabhängigkeiten (`requirements.lock`)
 
@@ -120,10 +126,10 @@ Paketliste mit Lizenzen steht in der jeweiligen Abbild-SBOM.
 
 | Abbild | genutzt für | Hauptkomponente / Lizenz | Distribution |
 |---|---|---|---|
-| `python:3.12.16-slim-bookworm` (per Digest) | App-Abbild (Build + Laufzeit) | CPython, PSF-2.0; zusätzlich `tini` (MIT) aus Debian | Debian 12, Paketlizenzen unter `/usr/share/doc/*/copyright` |
+| `python:3.12.16-slim-trixie` (per Digest) | App-Abbild (Build + Laufzeit; die Laufzeitstufe ohne ungenutzte Pakete wie util-linux, apt, perl, DECISIONS K14) | CPython, PSF-2.0; zusätzlich `tini` (MIT) aus Debian | Debian 13, Paketlizenzen unter `/usr/share/doc/*/copyright` |
 | `nginx:1.31.8-alpine` (per Digest) | Admin-Gateway und optionaler TLS-Proxy (beide ohne die Zusatzmodule acme/geoip/image-filter/njs/xslt und ohne curl) | nginx, BSD-2-Clause | Alpine Linux |
 | `postgres:16.15-alpine` | Datenbank (unverändert aus Docker Hub gezogen, nicht Teil der Projekt-Abbilder) | PostgreSQL, PostgreSQL-Lizenz | Alpine Linux |
 
 Nur für Entwicklung und Tests (nicht in ausgelieferten Abbildern): `axllent/mailpit`
-(MIT), `node:22-alpine` (Node.js, MIT), Playwright (Apache-2.0), Locust (MIT) sowie die Dev-Werkzeuge
+(MIT), `node:22-alpine` bzw. `node:22.23.4-alpine` (Node.js, MIT; JS-Tests, Quill-Neubau), Playwright (Apache-2.0), Locust (MIT) sowie die Dev-Werkzeuge
 aus `requirements-dev.lock` (pytest, ruff, mypy, httpx u. a.).

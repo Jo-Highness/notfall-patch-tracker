@@ -15,7 +15,7 @@
 # z. B. libpq in psycopg-binary) – deren Lizenzen stehen in THIRD_PARTY_NOTICES.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-IMAGE="${PYTHON_IMAGE:-python:3.12.16-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337}"
+IMAGE="${PYTHON_IMAGE:-python:3.12.16-slim-trixie@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da527dda1d031ab30}"
 PIP_LICENSES="${PIP_LICENSES_VERSION:-5.5.5}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

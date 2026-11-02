@@ -5,8 +5,8 @@ description: >-
   und ein backend-Pod (Admin + Jobs + mTLS-Gateway als Sidecar). Externe PostgreSQL-
   Datenbank, kein Subchart.
 type: application
-version: 0.2.0
-appVersion: "0.2.0"
+version: 0.2.1
+appVersion: "0.2.1"
 kubeVersion: ">=1.29.0-0"
 keywords:
   - patch-management

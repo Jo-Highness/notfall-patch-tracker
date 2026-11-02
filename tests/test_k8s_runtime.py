@@ -331,6 +331,73 @@ def test_probe_invalid_port_is_clean_failure(
     assert err == "probe: ADMIN_LISTEN_PORT ist keine gueltige Portnummer\n"
 
 
+def _healthz_server(status: int) -> tuple[Any, int]:
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(status if self.path == "/healthz" else 404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, srv.server_address[1]
+
+
+def test_probe_docker_healthcheck_by_role(tmp_path: Path) -> None:
+    """Docker-HEALTHCHECK (K14): mit public nur /healthz, ohne public Admin-Port/Heartbeat."""
+    ok, ok_port = _healthz_server(200)
+    bad, bad_port = _healthz_server(503)
+    admin = socket.socket()
+    admin.bind(("127.0.0.1", 0))
+    admin.listen(1)
+    admin_port = admin.getsockname()[1]
+    hb = tmp_path / "hb"
+    hb.touch()
+    try:
+        # all (Compose-Default) und public: wie bisher nur /healthz, Admin-Port egal.
+        for role in ("all", "public", "public,admin"):
+            env = {"APP_ROLE": role, "PUBLIC_LISTEN_PORT": str(ok_port), "ADMIN_LISTEN_PORT": "1"}
+            assert probe.run_docker(env) == []
+        assert probe.run_docker({"APP_ROLE": "all", "PUBLIC_LISTEN_PORT": str(bad_port)}) == [
+            f"Bearbeiter-Port {bad_port}: /healthz nicht 200"
+        ]
+        assert probe.run_docker({"APP_ROLE": "public", "PUBLIC_LISTEN_PORT": "x"}) == [
+            "PUBLIC_LISTEN_PORT ist keine gueltige Portnummer"
+        ]
+        # admin,jobs: kein /healthz (Port 8000 dann nicht offen), sondern Admin-Port + Heartbeat.
+        env = {
+            "APP_ROLE": "admin,jobs",
+            "ADMIN_BIND_ADDR": "127.0.0.1",
+            "ADMIN_LISTEN_PORT": str(admin_port),
+            "JOBS_HEARTBEAT_FILE": str(hb),
+            "PUBLIC_LISTEN_PORT": str(bad_port),
+        }
+        assert probe.run_docker(env) == []
+        old = time.time() - 300
+        os.utime(hb, (old, old))
+        assert "alt" in probe.run_docker(env)[0]
+    finally:
+        for srv in (ok, bad):
+            srv.shutdown()
+            srv.server_close()
+        admin.close()
+    assert probe.run_docker({**env, "JOBS_HEARTBEAT_FILE": ""}) == [
+        f"Admin-Port {admin_port} nicht erreichbar"
+    ]
+
+
+def test_probe_main_docker_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_ROLE", "public")
+    monkeypatch.setenv("PUBLIC_LISTEN_PORT", "x")
+    assert probe.main([]) == 0  # Kubernetes-Probe: public wird nicht geprueft
+    assert probe.main(["--docker"]) == 1
+
+
 def test_probe_parse_port() -> None:
     assert probe.parse_port(" 8001 ") == 8001
     assert probe.parse_port("65535") == 65535

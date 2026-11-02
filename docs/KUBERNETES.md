@@ -52,7 +52,7 @@ startet ihn neu (gleiches Supervisor-Verhalten wie unter Compose).
 ## 3. Abbilder
 
 ```bash
-VERSION=0.2.0
+VERSION=0.2.1
 REG=ghcr.io/<owner>
 docker build --target runtime -t $REG/notfall-patch-tracker:$VERSION \
   --build-arg NPT_REVISION="$(git rev-parse HEAD)" .
@@ -147,8 +147,8 @@ Minimal (Rest siehe `values.yaml` mit Kommentaren):
 
 ```yaml
 image:
-  app:     { registry: ghcr.io, repository: <owner>/notfall-patch-tracker,         tag: "0.2.0", digest: "sha256:…" }
-  gateway: { registry: ghcr.io, repository: <owner>/notfall-patch-tracker-gateway, tag: "0.2.0", digest: "sha256:…" }
+  app:     { registry: ghcr.io, repository: <owner>/notfall-patch-tracker,         tag: "0.2.1", digest: "sha256:…" }
+  gateway: { registry: ghcr.io, repository: <owner>/notfall-patch-tracker-gateway, tag: "0.2.1", digest: "sha256:…" }
 publicBaseUrl: https://npt.example.org
 adminBaseUrl: https://npt-admin.example.org
 config:
