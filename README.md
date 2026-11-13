@@ -41,7 +41,7 @@ Helm-Chart (Abschnitt [Kubernetes](#kubernetes)).
 [Admin-Handbuch](docs/handbuch/admin.md) (`/admin/hilfe`) ·
 [Sicherheitskonzept](docs/SECURITY.md) · [Lasttest](docs/LOADTEST.md) ·
 [Architektur](docs/ARCHITECTURE.md) · [Entscheidungen](docs/DECISIONS.md) ·
-[Kubernetes](docs/KUBERNETES.md) · [SBOM](docs/SBOM.md) · [Mitwirken](CONTRIBUTING.md)
+[Kubernetes](docs/KUBERNETES.md) · [SBOM](docs/SBOM.md) · [Barrierefreiheit](docs/BARRIEREFREIHEIT.md) · [Mitwirken](CONTRIBUTING.md)
 
 ## Ablauf „Notfall tritt ein“ in 5 Schritten
 
@@ -107,6 +107,13 @@ ein optionales HTTPS-Overlay für den Bearbeiter-Bereich liegt in `docker-compos
   seinen Identifier und kann eine Freischaltung anfragen; Admins bestätigen oder lehnen
   unter **Admin-Benutzer** ab. Dort lassen sich Admins auch direkt per Identifier
   hinzufügen, deaktivieren und entfernen. Der letzte aktive Admin ist geschützt.
+- **Erstinbetriebnahme im Browser:** Eine neue Instanz ohne Admin zeigt unter
+  `<PUBLIC_BASE_URL>/einrichtung` einen Installer. Der Einrichtungscode steht im Log:
+  `docker compose logs app | grep Einrichtungscode`. Dort legt man Seitennamen,
+  CA-Bundle (Root + Intermediates für die mTLS-Prüfung), optional eine Sperrliste und den
+  ersten Admin (Upload des Admin-Zertifikats) fest. Danach ist der Installer weg; das
+  Gateway übernimmt die CA ohne Neustart. Details: `docs/INSTALLATION.md` Abschnitt 3a.
+- Seitenname, CA und Sperrliste später unter **Einstellungen** (`/admin/einstellungen`).
 - Alle Admin-Aktionen stehen im Audit-Log (`/admin/audit`).
 - Admin-Handbuch mit dem Ablauf „Notfall tritt ein“ Schritt für Schritt: Link **Hilfe** im
   Kopf des Admin-Bereichs (`/admin/hilfe`, nur über das Gateway).

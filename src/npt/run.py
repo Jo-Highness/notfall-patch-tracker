@@ -88,11 +88,23 @@ def schema_newer_mode() -> SchemaNewer:
     raise RuntimeError("NPT_SCHEMA_NEWER muss fail oder warn sein")
 
 
+def announce_setup_code(settings: Settings, code: str) -> None:
+    """Einrichtungscode einmalig ausgeben (NPT-15); nur der Hash liegt in der DB."""
+    url = settings.PUBLIC_BASE_URL.rstrip("/") + "/einrichtung"
+    log.warning(
+        "Erstinbetriebnahme offen: %s aufrufen, Einrichtungscode %s "
+        "(neuer Code: python -m npt.setup_code)",
+        url,
+        code,
+        extra={"einrichtung": url},
+    )
+
+
 def prepare_database(settings: Settings, schema_newer: SchemaNewer = "fail") -> None:
     from sqlalchemy import Connection
     from sqlalchemy.orm import Session
 
-    from npt import admins
+    from npt import admins, instance
     from npt.db.session import make_engine
     from npt.migrate import upgrade_head, wait_for_db
 
@@ -104,6 +116,13 @@ def prepare_database(settings: Settings, schema_newer: SchemaNewer = "fail") -> 
             )
             session.commit()
         log.info("Admin-Bootstrap abgeschlossen", extra={"neu": created})
+        with Session(bind=conn) as session:
+            # Admins per Bootstrap -> Erstinbetriebnahme gilt als erledigt (NPT-15)
+            instance.close_if_admins(session)
+            code = instance.ensure_setup_code(session)
+            session.commit()
+        if code is not None:
+            announce_setup_code(settings, code)
 
     engine = make_engine(pool_size=1)
     try:

@@ -1,0 +1,39 @@
+{% extends "admin/layout.html" %}
+{% set is_news = kind == "news" %}
+{% set what = ("Beitrag" if is_news else "FAQ-Eintrag") %}
+{% block title %}{{ what }}{% if item_id %} bearbeiten{% else %} anlegen{% endif %} – {{ p.name }}{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ static_prefix }}/vendor/quill/quill.snow.css">
+<script src="{{ static_prefix }}/vendor/quill/quill.min.js" defer></script>
+<script src="{{ static_prefix }}/js/richtext.js" defer></script>
+{% endblock %}
+{% block content %}
+<p><a href="{{ base }}">← {{ "News" if is_news else "FAQ" }} „{{ p.name }}“</a></p>
+<h1>{{ what }}{% if item_id %} bearbeiten{% else %} anlegen{% endif %}</h1>
+{% if form_error %}<p class="msg msg-err" role="alert" data-testid="content-form-error">{{ form_error }}</p>{% endif %}
+<section class="card">
+  <form method="post" action="{{ base }}{% if item_id %}/{{ item_id }}{% endif %}" class="form" data-richtext-form data-testid="content-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if is_news %}
+    <label>Titel
+      <input type="text" name="title" maxlength="200" required value="{{ form.title }}" data-testid="content-title">
+    </label>
+    {% set field_name = "body_html" %}{% set label = "Text" %}
+    {% else %}
+    <label>Frage
+      <input type="text" name="question" maxlength="500" required value="{{ form.question }}" data-testid="content-question">
+    </label>
+    <label>Reihenfolge (kleinere Zahl steht weiter oben)
+      <input type="number" name="sort_order" min="-100000" max="100000" step="1" value="{{ form.sort_order }}" data-testid="content-sort">
+    </label>
+    {% set field_name = "answer_html" %}{% set label = "Antwort" %}
+    {% endif %}
+    <label for="richtext-source">{{ label }}</label>
+    <div class="richtext-editor" data-richtext-editor hidden><div data-testid="content-editor"></div></div>
+    <textarea name="{{ field_name }}" id="richtext-source" rows="12" data-richtext-source data-testid="content-body">{{ form[field_name] }}</textarea>
+    <p class="hint">Formatierung: Überschriften, fett, kursiv, Listen, Links (nur http, https, mailto).
+      Andere Formatierungen und Inhalte (z. B. Bilder, Skripte) werden beim Speichern entfernt.</p>
+    <button type="submit" class="btn btn-primary" data-testid="content-save">Speichern</button>
+  </form>
+</section>
+{% endblock %}

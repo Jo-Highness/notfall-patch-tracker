@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ project.name }} – Notfall-Patch-Tracker{% endblock %}
+{% block title %}{{ project.name }} – {{ site_name() }}{% endblock %}
 {% block head %}
   <link rel="stylesheet" href="{{ static_prefix }}/vendor/tabulator/tabulator.min.css">
   <script src="{{ static_prefix }}/vendor/tabulator/tabulator.min.js" defer></script>
@@ -12,6 +12,7 @@
 {% block nav %}{% include "public/project_nav.html" %}{% endblock %}
 {% block content %}
 <script type="application/json" id="npt-config">{{ config | tojson }}</script>
+<h1 class="visually-hidden">Liste – {{ project.name }}</h1>
 {% if project.read_only %}
 <p class="msg msg-err" role="status" data-testid="readonly-banner">Dieses Projekt ist {{ status_label }} und schreibgeschützt.</p>
 {% endif %}
@@ -40,14 +41,16 @@
   <button type="button" class="btn btn-small" id="live-hint-keep" data-testid="live-hint-keep">Behalten</button>
 </div>
 {% if not project.read_only %}
-<p class="edit-legend" data-testid="edit-legend"><span class="swatch"></span>Gelb hinterlegte Spalten (✎) bitte für jedes System ausfüllen – in die Zelle klicken.</p>
+<p class="edit-legend" data-testid="edit-legend"><span class="swatch"></span>Gelb hinterlegte Spalten (✎) bitte für jedes System ausfüllen – in die Zelle klicken oder mit der Tab-Taste hineinspringen (Enter speichert, Esc verwirft). Spaltenköpfe sortieren per Enter.</p>
 {% endif %}
+<a class="skip-link skip-link-inline" href="#nach-tabelle">Tabelle überspringen</a>
 <div id="grid" data-testid="grid"></div>
+<span id="nach-tabelle" tabindex="-1"></span>
 
-<dialog id="conflict-dialog" data-testid="conflict-dialog">
+<dialog id="conflict-dialog" aria-labelledby="conflict-title" aria-describedby="conflict-desc" data-testid="conflict-dialog">
   <form method="dialog" class="dialog-form">
-    <h2>Zwischenzeitlich geändert</h2>
-    <p>Das Feld <strong id="conflict-field"></strong> von System <strong id="conflict-system"></strong> wurde inzwischen von jemand anderem geändert.</p>
+    <h2 id="conflict-title">Zwischenzeitlich geändert</h2>
+    <p id="conflict-desc">Das Feld <strong id="conflict-field"></strong> von System <strong id="conflict-system"></strong> wurde inzwischen von jemand anderem geändert.</p>
     <dl class="facts">
       <dt>Aktueller Wert</dt><dd id="conflict-current" data-testid="conflict-current"></dd>
       <dt>Ihr Wert</dt><dd id="conflict-mine" data-testid="conflict-mine"></dd>
@@ -59,9 +62,9 @@
   </form>
 </dialog>
 
-<dialog id="name-dialog" data-testid="name-dialog">
+<dialog id="name-dialog" aria-labelledby="name-title" data-testid="name-dialog">
   <form method="dialog" class="dialog-form">
-    <h2>Wer bearbeitet?</h2>
+    <h2 id="name-title">Wer bearbeitet?</h2>
     <p class="hint">Optional: Ihr Name oder Kürzel wird zu Ihren Änderungen protokolliert und in diesem Browser gemerkt.</p>
     <label>Name/Kürzel <input type="text" id="name-input" maxlength="100" autocomplete="name" data-testid="name-input"></label>
     <div class="dialog-actions">
@@ -72,9 +75,9 @@
 </dialog>
 
 {% if not project.read_only %}
-<dialog id="new-system-dialog" data-testid="new-system-dialog">
+<dialog id="new-system-dialog" aria-labelledby="new-system-title" data-testid="new-system-dialog">
   <form id="new-system-form" class="dialog-form form" novalidate>
-    <h2>Neues System anlegen</h2>
+    <h2 id="new-system-title">Neues System anlegen</h2>
     <p class="hint">Alle Stammdatenfelder sind Pflicht. Die System-ID wird automatisch vergeben (NEW-…). Stammdaten können danach nur noch vom Admin korrigiert werden.</p>
     <div class="form-grid">
       {% for name in fields.MASTER_DATA_FIELDS %}
@@ -90,20 +93,24 @@
         <span class="field-error" data-error-for="{{ name }}"></span>
       </label>
       {% endfor %}
-      <label title="{{ labels.FIELD_HINTS["affected"] }}">{{ fields.DISPLAY_NAMES["affected"] }}
+      <label>{{ fields.DISPLAY_NAMES["affected"] }}
+        <span class="hint field-hint" id="hint-affected">{{ labels.FIELD_HINTS["affected"] }}</span>
         <select name="affected" data-testid="new-affected"><option value="">(leer)</option>{% for k, v in config.columns[4].enum.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
       </label>
-      <label title="{{ labels.FIELD_HINTS["installed_version"] }}">{{ fields.DISPLAY_NAMES["installed_version"] }}
+      <label>{{ fields.DISPLAY_NAMES["installed_version"] }}
+        <span class="hint field-hint" id="hint-installed_version">{{ labels.FIELD_HINTS["installed_version"] }}</span>
         <input type="text" name="installed_version" maxlength="255" autocomplete="off" data-testid="new-installed_version">
       </label>
-      <label title="{{ labels.FIELD_HINTS["action_taken"] }}">{{ fields.DISPLAY_NAMES["action_taken"] }}
+      <label>{{ fields.DISPLAY_NAMES["action_taken"] }}
+        <span class="hint field-hint" id="hint-action_taken">{{ labels.FIELD_HINTS["action_taken"] }}</span>
         <select name="action_taken" data-testid="new-action_taken"><option value="">(leer)</option>{% for k, v in config.columns[6].enum.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
       </label>
-      <label class="wide" title="{{ labels.FIELD_HINTS["remark"] }}">{{ fields.DISPLAY_NAMES["remark"] }}
+      <label class="wide">{{ fields.DISPLAY_NAMES["remark"] }}
+        <span class="hint field-hint" id="hint-remark">{{ labels.FIELD_HINTS["remark"] }}</span>
         <textarea name="remark" maxlength="4000" rows="2" data-testid="new-remark"></textarea>
       </label>
     </div>
-    <p class="msg msg-err" id="new-system-error" hidden data-testid="new-system-error"></p>
+    <p class="msg msg-err" id="new-system-error" role="alert" hidden data-testid="new-system-error"></p>
     <div class="dialog-actions">
       <button type="submit" class="btn btn-primary" data-testid="new-system-submit">Anlegen</button>
       <button type="button" class="btn" id="new-system-cancel" data-testid="new-system-cancel">Abbrechen</button>

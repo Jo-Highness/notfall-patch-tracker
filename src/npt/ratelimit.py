@@ -65,3 +65,15 @@ def hit(session: Session, limit: Limit, client: str, now: float | None = None) -
         raise
     if hits > limit.limit:
         raise RateLimitedError(max(1, int(window + limit.window_s - current + 0.999)))
+
+
+def peek(session: Session, limit: Limit, client: str, now: float | None = None) -> None:
+    """Nur pruefen (nicht zaehlen): 429, wenn das Fenster bereits ausgeschoepft ist."""
+    current = now if now is not None else clock()
+    window = int(current // limit.window_s) * limit.window_s
+    hits = session.execute(
+        text("SELECT hits FROM rate_limit_buckets WHERE bucket_key = :k AND window_start = :w"),
+        {"k": f"{limit.name}:{client}", "w": window},
+    ).scalar()
+    if hits is not None and int(hits) >= limit.limit:
+        raise RateLimitedError(max(1, int(window + limit.window_s - current + 0.999)))

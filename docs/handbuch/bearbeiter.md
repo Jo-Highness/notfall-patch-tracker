@@ -44,6 +44,16 @@ Bemerkung kurz beschreiben, wie.
 - Filter und Suche stehen in der Adresszeile: Den Link können Sie weitergeben, er zeigt
   genau diese Sicht. „Filter zurücksetzen“ zeigt wieder alles.
 - „x von y Systemen angezeigt“ zählt die aktuelle Sicht.
+- **Ihr Filter wird gemerkt:** Suche, Spaltenfilter und Sortierung gelten auch nach dem
+  Neuladen und in **allen anderen Projekten** weiter. Filtern Sie also einmal nach Ihrem
+  Namen, sehen Sie in jedem Projekt gleich Ihre Systeme. Die Zeile unter der Werkzeugleiste
+  meldet dann „Gemerkter Filter angewendet“.
+  - Ein Link, der selbst Filter enthält (z. B. aus einer Mail mit „Ihre Systeme“), hat
+    Vorrang und ändert Ihren gemerkten Filter nicht.
+  - „Filter zurücksetzen“ hebt den gemerkten Filter auf.
+  - Gespeichert wird nur in Ihrem Browser (Cookie `npt_filter`, ein Jahr gültig), nicht auf
+    dem Server. An einem gemeinsam genutzten Rechner vor dem Gehen „Filter zurücksetzen“
+    wählen, wenn der Filter Ihren Namen enthält.
 
 ## Wenn jemand anderes gleichzeitig ändert (Konflikt)
 
@@ -78,6 +88,135 @@ die Liste genau mit diesen Systemen. Die Übersicht aktualisiert sich selbst.
 
 **Export (Sicht)** lädt die aktuell gefilterte Liste, **Export (alle)** alle Systeme des
 Projekts als .xlsx (Kopfzeile fixiert, Autofilter gesetzt).
+
+## Excel: Liste als Datenquelle (Pivot, automatisch aktualisieren)
+
+Excel kann die Liste direkt als **externe Datenquelle** einbinden (Power Query). Darauf
+lassen sich Pivot-Tabellen und Diagramme bauen, die sich selbst aktualisieren – ohne
+jedes Mal neu zu exportieren. Beschrieben für Excel unter Windows (Microsoft 365 bzw.
+2016 oder neuer).
+
+1. **Daten → Aus dem Web** wählen und diese Adresse eintragen:
+   `{{export_url}}`
+   Fragt Excel nach dem Zugriff, **Anonym** wählen und **Verbinden**.
+2. Im Navigator das Blatt **Systeme** markieren und **Laden in … → PivotTable-Bericht**
+   wählen (oder „Tabelle“, wenn Sie die Daten zusätzlich als Tabelle sehen möchten).
+3. **Automatisch aktualisieren:** **Daten → Abfragen und Verbindungen**, Rechtsklick auf
+   die Abfrage → **Eigenschaften** → **Aktualisieren alle 5 Minuten** und **Daten beim
+   Öffnen der Datei aktualisieren** anhaken. Sofort aktualisieren: **Daten → Alle
+   aktualisieren**.
+
+Nur einen Ausschnitt einbinden (z. B. nur Ihre Systeme): Liste filtern, dann den Knopf
+**Export (Sicht)** mit der rechten Maustaste anklicken, „Link kopieren“ und diesen Link in
+Schritt 1 verwenden. Er enthält Ihre Filter.
+
+Für die Power-Query-Formel (Erweiterter Editor):
+
+```
+let
+    Quelle = Excel.Workbook(Web.Contents("{{export_url}}"), null, true),
+    Systeme = Quelle{[Item = "Systeme", Kind = "Sheet"]}[Data],
+    Kopf = Table.PromoteHeaders(Systeme, [PromoteAllScalars = true])
+in
+    Kopf
+```
+
+**Wichtig:**
+- Die Arbeitsmappe speichert die Adresse mit dem Projekt-Link. Wer die Datei bekommt, hat
+  damit Zugang zur Liste. Vor dem Weitergeben die Abfrage löschen oder nur Werte
+  weitergeben.
+- Erzeugt der Admin einen neuen Link, die Adresse unter **Daten → Daten abrufen →
+  Datenquelleneinstellungen** ersetzen.
+- Kürzer als alle 5 Minuten bitte nicht aktualisieren: Die Daten ändern sich ohnehin nur,
+  wenn jemand etwas einträgt, und viele Arbeitsmappen gleichzeitig belasten den Server.
+
+## News und FAQ
+
+Unter **News** veröffentlichen die Admins Meldungen zum Projekt (neueste zuerst, 20 je
+Seite; jeder Beitrag hat einen eigenen Link zum Weitergeben). Unter **FAQ** stehen häufige
+Fragen mit Antworten: Das Suchfeld filtert schon beim Tippen – jedes eingegebene Wort muss in
+Frage oder Antwort vorkommen, Groß-/Kleinschreibung egal. News und FAQ können nur Admins
+ändern.
+
+## Zugriff per KI-Assistent (MCP)
+
+Die Liste lässt sich auch mit einem KI-Assistenten lesen und bearbeiten, der das Model
+Context Protocol (MCP, „Streamable HTTP“) beherrscht, z. B. Claude Code, GitHub Copilot
+(VS Code) oder Kiro.
+
+Adresse mit Projekt-Link (am einfachsten): `{{mcp_url}}`
+
+Adresse ohne Token (empfohlen): `{{basis_url}}/mcp`, dazu der Header
+`Authorization: Bearer <Token>`. Der Token ist der letzte Teil des Projekt-Links nach
+`/p/`. So steht er weder in Proxy-Logs noch in Konfigurationsdateien.
+
+**Claude Code** (Terminal):
+
+```
+claude mcp add --transport http npt {{mcp_url}}
+```
+
+oder mit Header:
+
+```
+claude mcp add --transport http npt {{basis_url}}/mcp --header "Authorization: Bearer <Token>"
+```
+
+**GitHub Copilot in VS Code**: Datei `.vscode/mcp.json` im Arbeitsordner (oder über
+„MCP: Open User Configuration“ für alle Ordner). VS Code fragt den Token beim ersten Start
+ab und speichert ihn im Geheimspeicher, nicht in der Datei:
+
+```
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "npt-token",
+      "description": "Token aus dem Projekt-Link (Teil nach /p/)",
+      "password": true
+    }
+  ],
+  "servers": {
+    "npt": {
+      "type": "http",
+      "url": "{{basis_url}}/mcp",
+      "headers": { "Authorization": "Bearer ${input:npt-token}" }
+    }
+  }
+}
+```
+
+Danach im Copilot-Chat den **Agent-Modus** wählen; die Werkzeuge von „npt“ erscheinen
+in der Werkzeugliste.
+
+**Kiro**: Datei `.kiro/settings/mcp.json` im Arbeitsordner oder `~/.kiro/settings/mcp.json`
+für alle Arbeitsbereiche. Den Token als Umgebungsvariable `NPT_TOKEN` setzen, dann steht
+er nicht in der Datei:
+
+```
+{
+  "mcpServers": {
+    "npt": {
+      "url": "{{basis_url}}/mcp",
+      "headers": { "Authorization": "Bearer ${NPT_TOKEN}" }
+    }
+  }
+}
+```
+
+Das Geheimnis ist derselbe Token wie im Projekt-Link – wer die MCP-Adresse hat, kann die
+Liste genauso ausfüllen wie mit dem Link. Der MCP-Zugang dient nur dem **Ausfüllen der
+Liste**: Der Assistent kann alle Einträge mit allen Details auflisten, Einträge durchsuchen
+(Freitext, „System betroffen“/„Ausgeführte Aktion“ inkl. „noch leer“, „Feld enthält“) und
+nur die vier *-Felder setzen (System betroffen, installierte Version, Ausgeführte Aktion,
+Bemerkung). Systeme anlegen oder Stammdaten ändern geht per MCP nicht. Änderungen erscheinen sofort in allen
+geöffneten Listen und im Änderungsprotokoll mit der Quelle „MCP“. Gleichzeitige Änderungen
+schützt derselbe Konfliktmechanismus wie in der Liste.
+
+**Achtung:** Bemerkungen und andere Freitexte stammen von anderen Bearbeitern. Ein
+Assistent soll sie als Daten behandeln, nicht als Anweisungen – Änderungen des Assistenten
+vor dem Bestätigen prüfen. „Token neu generieren“ durch den Admin sperrt auch den
+MCP-Zugang.
 
 ## FAQ
 

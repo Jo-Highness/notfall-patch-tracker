@@ -115,6 +115,21 @@
     return usp.toString();
   }
 
+  /** Teil des Zustands, der projektuebergreifend gemerkt wird (NPT-17): Suche, Spaltenfilter,
+   *  Sortierung - ohne die Link-Vorfilter x.* (die gehoeren zu einem konkreten Link). */
+  function persistQuery(st) {
+    return toQuery({ q: st.q, contains: st.contains, enums: st.enums, exact: {}, sort: st.sort, desc: st.desc });
+  }
+
+  /** true, wenn die URL selbst Filter, Vorfilter oder Sortierung vorgibt (dann hat sie Vorrang). */
+  function hasViewParams(search) {
+    var found = false;
+    new URLSearchParams(search || "").forEach(function (v, k) {
+      if (k === "q" || k === "sort" || k === "dir" || k.slice(0, 2) === "f." || k.slice(0, 2) === "x.") { found = true; }
+    });
+    return found;
+  }
+
   function displayText(row, name) {
     var value = row[name];
     if (value === null || value === undefined || value === "") { return ""; }
@@ -189,6 +204,7 @@
   return {
     EMPTY_KEY: EMPTY_KEY, LIST_FIELDS: LIST_FIELDS, ENUM_FIELDS: ENUM_FIELDS,
     parse: parse, toParams: toParams, toQuery: toQuery, emptyState: emptyState,
+    persistQuery: persistQuery, hasViewParams: hasViewParams,
     displayText: displayText, matches: matches, matchesGlobal: matchesGlobal,
     matchesContains: matchesContains, matchesExact: matchesExact, enumHit: enumHit,
     compareRows: compareRows, apply: apply, isEnum: isEnum

@@ -91,7 +91,7 @@ def db_engine() -> Iterator[Engine]:
 TRUNCATE_TABLES = (
     "admin_users, admin_access_requests, admin_audit_log, change_log, mail_deliveries, "
     "mail_runs, mail_campaigns, backups, staged_uploads, project_systems, projects, "
-    "master_systems, master_imports, rate_limit_buckets, health_probe"
+    "master_systems, master_imports, rate_limit_buckets, health_probe, project_news, project_faq"
 )
 
 
@@ -99,6 +99,9 @@ TRUNCATE_TABLES = (
 def session_factory(db_engine: Engine) -> sessionmaker[Session]:
     with db_engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {TRUNCATE_TABLES} RESTART IDENTITY CASCADE"))
+        # Einstellungen der Instanz auf den Zustand nach der Migration (NPT-15).
+        conn.execute(text("DELETE FROM instance_settings"))
+        conn.execute(text("INSERT INTO instance_settings (id) VALUES (1)"))
     return sessionmaker(bind=db_engine, expire_on_commit=False, autoflush=False)
 
 

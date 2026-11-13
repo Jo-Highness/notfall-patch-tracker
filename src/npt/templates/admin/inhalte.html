@@ -1,0 +1,39 @@
+{% extends "admin/layout.html" %}
+{% set is_news = kind == "news" %}
+{% block title %}{{ "News" if is_news else "FAQ" }} – {{ p.name }}{% endblock %}
+{% block content %}
+<p><a href="/admin/projekte/{{ p.id }}">← Projekt „{{ p.name }}“</a></p>
+<h1>{{ "News" if is_news else "FAQ" }} – {{ p.name }}</h1>
+<p class="hint">Lesbar für alle mit der Projekt-URL:
+  <a href="{{ public_url }}" target="_blank" rel="noopener noreferrer" data-testid="content-public-link">{{ "News-Seite" if is_news else "FAQ-Seite" }} öffnen<span class="visually-hidden"> (öffnet neues Fenster)</span></a>.
+  Bearbeiten können nur Admins.</p>
+<p><a class="btn btn-primary" href="{{ base }}/neu" data-testid="content-new">{{ "Neuer Beitrag" if is_news else "Neuer FAQ-Eintrag" }}</a></p>
+<section class="card">
+{% if items %}
+  <table class="tbl" data-testid="content-list">
+    <thead><tr>
+      {% if is_news %}<th>Titel</th><th>Veröffentlicht</th><th>Zuletzt geändert</th>
+      {% else %}<th>Reihenfolge</th><th>Frage</th><th>Zuletzt geändert</th>{% endif %}
+      <th><span class="visually-hidden">Aktionen</span></th></tr></thead>
+    <tbody>
+    {% for it in items %}
+      <tr data-testid="content-row-{{ it.id }}">
+        {% if is_news %}<td>{{ it.title }}</td><td>{{ it.created_at | dt }}{% if it.created_by %} <code>{{ it.created_by }}</code>{% endif %}</td>
+        {% else %}<td>{{ it.sort_order }}</td><td>{{ it.question }}</td>{% endif %}
+        <td>{% if it.updated_by %}{{ it.updated_at | dt }} <code>{{ it.updated_by }}</code>{% endif %}</td>
+        <td class="actions">
+          <a class="btn" href="{{ base }}/{{ it.id }}" data-testid="content-edit-{{ it.id }}">Bearbeiten</a>
+          <form method="post" action="{{ base }}/{{ it.id }}/loeschen" data-confirm="Eintrag endgültig löschen?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-danger" data-testid="content-delete-{{ it.id }}">Löschen</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="hint" data-testid="content-empty">{{ "Noch keine Beiträge." if is_news else "Noch keine FAQ-Einträge." }}</p>
+{% endif %}
+</section>
+{% endblock %}

@@ -279,6 +279,15 @@ def test_help_pages_render_real_handbooks(
     title = r.text.split("<title>", 1)[1].split("</title>", 1)[0]
     assert title == "Hilfe für Bearbeiter – CVE &lt;x&gt; – Notfall-Patch-Tracker", title
     assert 'data-testid="nav-hilfe"' in r.text
+    # NPT-18: Adressen aus PUBLIC_BASE_URL (nie aus dem Host-Header), MCP ohne Doppel-Slash
+    assert f"http://npt.test{proj.base}/mcp" in r.text
+    assert f"{proj.base}//mcp" not in r.text
+    assert f"http://npt.test{proj.base}/export.xlsx?umfang=alle" in r.text
+    assert "http://npt.test/mcp" in r.text
+    for client in ("GitHub Copilot", ".vscode/mcp.json", "Kiro", ".kiro/settings/mcp.json"):
+        assert client in r.text, client
+    r_host = c.get(f"{proj.base}/hilfe", headers={"host": "boese.example"})
+    assert "boese.example" not in r_host.text
     for heading in ("Neues System", "Konflikt", "Übersicht", "Export", "FAQ"):
         assert heading in r.text, heading
     # Admin-Handbuch existiert auf dem Bearbeiter-Port nicht

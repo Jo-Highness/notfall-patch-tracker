@@ -52,7 +52,8 @@ HEALTH_READY_MAX_AGE_S = 30.0
 HEALTH_STALL_EXIT_S = 120.0
 
 # --- Sicherheit ---
-CSRF_TTL_S = 12 * 3600
+# 24 h: laenger als ein Arbeitstag, WCAG 2.2.1 (Ausnahme > 20 h) fuer offene Listen (NPT-16)
+CSRF_TTL_S = 24 * 3600
 CSRF_FUTURE_SKEW_S = 300
 MAX_CERT_HEADER_BYTES = 16 * 1024
 
@@ -95,3 +96,27 @@ def check_ranking() -> None:
         problems.append("Buendelfenster muss deutlich unter der Wiederverbindungszeit liegen")
     if problems:
         raise RuntimeError("limits.py inkonsistent: " + "; ".join(problems))
+
+
+# --- News/FAQ je Projekt (NPT-13, Auflage 6) ---
+NEWS_MAX_PER_PROJECT = 1000
+FAQ_MAX_PER_PROJECT = 1000
+NEWS_PAGE_SIZE = 20  # Beitraege je Seite auf /p/<token>/news
+
+# --- MCP (NPT-14, Auflage 6) ---
+MCP_LIST_DEFAULT = 100
+MCP_LIST_MAX = 500
+MCP_BODY_MAX = 64 * 1024
+
+# --- Erstinbetriebnahme / Vertrauensanker (NPT-15) ---
+SETUP_BODY_MAX = 1024 * 1024  # Body-Grenze fuer /einrichtung (Multipart mit CA/CRL)
+SETUP_CODE_ATTEMPTS = 10  # Fehlversuche Einrichtungscode je IP und Fenster
+SETUP_CODE_WINDOW_S = 300
+CA_BUNDLE_MAX_BYTES = 256 * 1024
+CA_BUNDLE_MAX_CERTS = 20
+CRL_MAX_BYTES = 512 * 1024
+CERT_UPLOAD_MAX_BYTES = 64 * 1024
+SITE_NAME_MAX = 80
+SITE_NAME_CACHE_S = 30.0  # Seitenname je Prozess zwischenspeichern
+TRUST_SYNC_INTERVAL_S = 15.0  # Jobs: DB -> TRUST_DIR (entspricht dem Jobs-Tick)
+SELF_SIGNED_DAYS = 825

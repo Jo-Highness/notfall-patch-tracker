@@ -22,7 +22,7 @@ def test_valid_token_roundtrip() -> None:
 @pytest.mark.parametrize(
     ("token_fn", "now"),
     [
-        (lambda: csrf.issue_token(SECRET, SCOPE, now=1_000_000), 1_000_000 + 12 * 3600 + 1),
+        (lambda: csrf.issue_token(SECRET, SCOPE, now=1_000_000), 1_000_000 + 24 * 3600 + 1),
         (lambda: csrf.issue_token(SECRET, SCOPE, now=1_000_000 + 4000), 1_000_000),
         (lambda: csrf.issue_token(b"t" * 32, SCOPE, now=1_000_000), 1_000_000),
         (lambda: csrf.issue_token(SECRET, SCOPE + "x", now=1_000_000), 1_000_000),

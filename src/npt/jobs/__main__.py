@@ -14,8 +14,12 @@ if __name__ == "__main__":
     settings = get_settings()
     configure_logging(settings.LOG_LEVEL)
     from npt.db.session import new_session
-    from npt.jobs import backups, housekeeping, mail, master_api
+    from npt.jobs import backups, housekeeping, mail, master_api, trust
 
+    trust_job = trust.make_job(settings, new_session)
+    if trust_job is not None:
+        # Zuerst: das Gateway wartet bei der Erstinbetriebnahme auf diese Dateien.
+        JOBS.append(("vertrauensanker", trust_job))
     JOBS.append(("backups", backups.make_job(settings, new_session, progress=beat)))
     JOBS.append(("health_probe_aufraeumen", housekeeping.make_job(new_session)))
     api_job = master_api.make_job(settings, new_session)

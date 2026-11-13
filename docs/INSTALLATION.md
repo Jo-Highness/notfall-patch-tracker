@@ -115,15 +115,15 @@ vorhandenen Docker-Netzen kollidieren (dann alle drei passend).
 
 | Variable | Default | Bedeutung |
 |---|---|---|
-| `ADMIN_PKI_DIR` | `./pki-out/gateway` | **Host-Verzeichnis** (absoluter Pfad in Produktion), wird read-only nach `/etc/npt-gateway/pki` gemountet; enthält CA-Bundle, Server-Zertifikat/-Key, optional CRL |
+| `ADMIN_PKI_DIR` | `./pki-out/gateway` | **Host-Verzeichnis** (absoluter Pfad in Produktion), wird read-only nach `/etc/npt-gateway/pki` gemountet; enthält CA-Bundle, Server-Zertifikat/-Key, optional CRL. **Optional** bei Erstinbetriebnahme im Browser (Abschnitt 3a): dann darf es leer sein |
 | `ADMIN_CA_BUNDLE_PATH` | `/etc/npt-gateway/pki/ca-bundle.pem` | CA-Bundle (Root + Intermediates) für die Prüfung der Client-Zertifikate – Pfad **im Container** |
 | `GATEWAY_TLS_CERT_PATH` | `/etc/npt-gateway/pki/server.crt` | Server-Zertifikat (mit Kette) des Gateways |
 | `GATEWAY_TLS_KEY_PATH` | `/etc/npt-gateway/pki/server.key` | Server-Schlüssel |
-| `ADMIN_CRL_PATH` | leer | Optional CRL (PEM). Gesetzt, aber Datei fehlt → Gateway startet nicht (fail closed) |
-| `CRL_RELOAD_INTERVAL` | `60` | Sekunden zwischen den Prüfungen von Serverzertifikat, Schlüssel, CA-Bundle und CRL (Reload ohne Neustart bei geändertem Inhalt) |
-| `ADMIN_VERIFY_DEPTH` | `2` | Maximale Kettentiefe der Client-Zertifikatsprüfung (1 = direkt von der Root, 2 = über eine Intermediate) |
+| `ADMIN_CRL_PATH` | leer | Optional CRL (PEM). Gesetzt, aber Datei fehlt → Gateway startet nicht (fail closed). Eine im Browser hinterlegte CRL gilt zusätzlich |
+| `CRL_RELOAD_INTERVAL` | `60` | Sekunden zwischen den Prüfungen von Serverzertifikat, Schlüssel, CA-Bundle und CRL – aus `ADMIN_PKI_DIR` und den im Browser gepflegten (Reload ohne Neustart bei geändertem Inhalt). Im Einrichtungsmodus prüft das Gateway alle 5 s |
+| `ADMIN_VERIFY_DEPTH` | `2` | Maximale Kettentiefe der Client-Zertifikatsprüfung (1 = direkt von der Root, 2 = über eine Intermediate). Gilt für Gateway und App (Prüfung hochgeladener Admin-Zertifikate, Aussperrschutz) |
 | `ADMIN_CERT_ID_ATTRIBUTE` | `subject_dn` | Woran Admins erkannt werden: `subject_dn`, `san_email`, `san_upn`, `fingerprint_sha256` (Abschnitt 3) |
-| `ADMIN_BOOTSTRAP_IDS` | leer | Initiale Admins, getrennt mit `;` oder Zeilenumbruch, oder JSON-Liste; optional mit Aussteller `<Issuer-DN>::<Identifier>`. Werden beim Start angelegt, falls nicht vorhanden |
+| `ADMIN_BOOTSTRAP_IDS` | leer | Initiale Admins, getrennt mit `;` oder Zeilenumbruch, oder JSON-Liste; optional mit Aussteller `<Issuer-DN>::<Identifier>`. Werden beim Start angelegt, falls nicht vorhanden. Leer lassen, wenn der erste Admin im Browser angelegt wird (Abschnitt 3a) – ein gesetzter Wert schließt die Erstinbetriebnahme im Browser |
 
 ### Prozesse und Betrieb
 
@@ -172,10 +172,72 @@ vorhandenen Docker-Netzen kollidieren (dann alle drei passend).
 | `MASTER_API_SCHEDULE_MINUTES` | `0` | > 0: zeitgesteuert, legt nur eine **Vorschau** an (Übernahme durch Admin) |
 
 Von Compose fest gesetzt und **nicht** in die `.env` gehörend: `ADMIN_BIND_ADDR`,
-`ADMIN_GATEWAY_CIDR`, `POSTGRES_HOST`, `POSTGRES_PORT`, `BACKUP_DIR` (`/data/backups`).
+`ADMIN_GATEWAY_CIDR`, `POSTGRES_HOST`, `POSTGRES_PORT`, `BACKUP_DIR` (`/data/backups`),
+`TRUST_DIR` (`/data/trust`, Volume `admin_trust`: im Browser gepflegte CA/CRL und
+selbstsigniertes Rückfall-Zertifikat für das Gateway).
 `COMPOSE_PROJECT_NAME`/`COMPOSE_FILE` können zusätzlich in der `.env` stehen (Docker-Standard).
 
-## 3. PKI für den Admin-Zugang
+## 3a. Erstinbetriebnahme im Browser (empfohlen)
+
+Ohne Dateien in `ADMIN_PKI_DIR` und ohne `ADMIN_BOOTSTRAP_IDS` richtet man die Instanz
+nach dem ersten Start im Browser ein:
+
+1. Stack starten (Abschnitt 4). Das Gateway läuft zunächst im **Einrichtungsmodus**: Es
+   nutzt ein selbstsigniertes Serverzertifikat, das die App erzeugt, und beantwortet jede
+   Anfrage mit 503 „Admin-Zugang noch nicht eingerichtet“. Weitergeleitet wird nichts.
+2. Einrichtungscode aus dem Log holen:
+   `docker compose logs app | grep Einrichtungscode`. Der Code steht nur einmal im Log,
+   in der Datenbank liegt nur sein Hash. Einen neuen Code (der alte wird ungültig) erzeugt
+   `docker compose exec app python -m npt.setup_code`.
+3. `PUBLIC_BASE_URL/einrichtung` öffnen, und zwar genau über diese Adresse, weil der Origin
+   geprüft wird. Dann den Code eingeben und die Schritte ausfüllen:
+   - **Seitenname** (oben auf jeder Seite und im Fenstertitel).
+   - **CA-Bundle**: Root-CA und ggf. Intermediates, die die Admin-Zertifikate ausstellen.
+     Erlaubt ist PEM oder ein einzelnes DER-Zertifikat. Die Root muss dabei sein, denn
+     Intermediates allein akzeptiert nginx nicht. Nur CA-Zertifikate, nichts Abgelaufenes,
+     keine privaten Schlüssel.
+   - **Sperrliste** (optional): muss von einer CA des Bundles signiert und noch gültig sein.
+   - **Erster Admin**: das öffentliche Admin-Zertifikat hochladen (`.crt`/`.pem`, **nicht**
+     die `.p12`). Der Identifier wird nach `ADMIN_CERT_ID_ATTRIBUTE` gebildet, der Admin an
+     den Aussteller gebunden, und die Kette wird gegen das hochgeladene Bundle geprüft.
+     Alternativ lässt sich der Identifier von Hand eingeben.
+   - **Prüfung** der `.env`-Werte (nur Anzeige): `PUBLIC_BASE_URL`, `ADMIN_BASE_URL`,
+     SMTP, `TRUSTED_PROXY_IPS` und der SHA-256-Fingerprint des selbstsignierten
+     Gateway-Zertifikats.
+4. **Einrichtung abschließen.** Ab dann antwortet `/einrichtung` dauerhaft mit 404. Das
+   Gateway übernimmt die CA ohne Neustart innerhalb von etwa 20 s (Jobs-Takt 15 s plus
+   5 s Prüfintervall). Danach `https://<gateway-host>:8443/admin/` mit dem
+   Admin-Zertifikat öffnen und bei der Zertifikatswarnung den Fingerprint vergleichen.
+
+Später pflegt man Seitennamen, CA und Sperrliste im Admin-Bereich unter *Einstellungen*.
+Ersetzt man dort die CA durch eine, die das eigene Zertifikat nicht abdeckt, muss man das
+ausdrücklich bestätigen (Aussperrschutz).
+
+**Zusammenspiel mit Dateien:**
+- Das Gateway vertraut der **Vereinigung** aus Datei-CA (`ADMIN_PKI_DIR/ca-bundle.pem`) und
+  Web-CA. Liegt in `ADMIN_PKI_DIR` ein `server.crt`/`server.key`, hat dieses Paar Vorrang
+  vor dem selbstsignierten.
+- Sperrlisten aus beiden Quellen werden zusammengeführt. Mit gesetzter CRL prüft nginx
+  **jede** CA der Kette auf eine CRL. Wer CRLs nutzt, braucht also für jede CA (Datei und
+  Web) eine gültige CRL, sonst werden deren Zertifikate abgewiesen. Im Browser lädt man dazu
+  alle CRLs hintereinander in einer PEM-Datei hoch; der Installer und die Einstellungen
+  lehnen eine Sperrliste ab, die nicht jede CA des Web-Bundles abdeckt.
+- **Ausgesperrt?** `docker compose exec app python -m npt.trust_reset` leert Web-CA und
+  Web-CRL; danach gilt nur die Datei-CA (ohne Datei-CA: Einrichtungsmodus, dann CA per
+  Datei bereitstellen).
+- Für den Produktivbetrieb empfiehlt sich ein eigenes Serverzertifikat per Datei.
+- Bestandsinstallationen (vorhandene Admins) bleiben unverändert: Die Migration markiert
+  sie als eingerichtet, der Installer erscheint dort nicht.
+- **Sicherheit:** Bis zum Abschluss ist `/einrichtung` im Bearbeiter-Bereich erreichbar.
+  Schutz bieten der 100-Bit-Code, die Origin-Prüfung und das Rate-Limit (10 Fehlversuche
+  je 5 min und IP; danach ist für diese IP bis zum Fensterende jede Eingabe gesperrt). Den
+  Installer nur über HTTPS (Reverse Proxy, Abschnitt 5) aufrufen – Code und Fingerprint
+  laufen sonst im Klartext. Die Einrichtung daher direkt nach dem ersten Start erledigen.
+
+## 3. PKI für den Admin-Zugang (Dateien)
+
+Alternative zu 3a bzw. zusätzlich dazu: eigenes Serverzertifikat, CA per Datei, Admins per
+`ADMIN_BOOTSTRAP_IDS`.
 
 Ins Verzeichnis `ADMIN_PKI_DIR` (z. B. `/opt/npt-pki`, Eigentümer root, Dateien lesbar für
 den nginx-Benutzer im Container: `0644` für Zertifikate/CRL, Schlüssel `0640` mit
@@ -241,11 +303,13 @@ Zum Testen erzeugt `scripts/gen-test-pki.sh` eine vollständige Test-PKI (nur Te
 docker compose ps
 curl -fsS http://127.0.0.1:8080/healthz    # {"status":"ok"}       Liveness
 curl -fsS http://127.0.0.1:8080/readyz     # {"status":"ready"}    DB erreichbar
-docker compose logs -f app                 # JSON-Logs; "Migration abgeschlossen", "Admin-Bootstrap abgeschlossen"
+docker compose logs -f app                 # JSON-Logs; "Migration abgeschlossen", "Admin-Bootstrap abgeschlossen",
+                                           # bei neuer Instanz ohne Admin: "Einrichtungscode …" (Abschnitt 3a)
 ```
 
 Migrationen laufen beim Start automatisch (Advisory Lock, mehrere Instanzen sicher).
-Danach im Browser mit dem Admin-Zertifikat `https://<gateway-host>:8443/admin/` öffnen.
+Ohne Admin: zuerst die Erstinbetriebnahme im Browser (Abschnitt 3a). Danach im Browser mit
+dem Admin-Zertifikat `https://<gateway-host>:8443/admin/` öffnen.
 
 **Erster Stammdatenimport:** *Stammdaten* → *Excel-Vorlage herunterladen*, mit den Daten
 füllen (oder Export des Quellsystems mit passenden Spaltenköpfen), hochladen, Vorschau

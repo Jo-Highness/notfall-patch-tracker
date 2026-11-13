@@ -1,5 +1,5 @@
 {% extends "admin/layout.html" %}
-{% block title %}Stammdaten – Notfall-Patch-Tracker{% endblock %}
+{% block title %}Stammdaten – {{ site_name() }}{% endblock %}
 {% block content %}
 <h1>Stammdaten</h1>
 <p class="hint">Aktueller Bestand: <strong data-testid="master-total">{{ stats.total }}</strong> Systeme
@@ -27,7 +27,7 @@
 <section class="card">
   <h2>Offene Vorschauen</h2>
   <table class="tbl">
-    <thead><tr><th>Hochgeladen</th><th>Datei</th><th>von</th><th></th></tr></thead>
+    <thead><tr><th>Hochgeladen</th><th>Datei</th><th>von</th><th><span class="visually-hidden">Aktionen</span></th></tr></thead>
     <tbody>
     {% for s in stages %}
       <tr><td>{{ s.created_at | dt }}</td><td>{{ s.file_name or "" }}</td><td><code>{{ s.created_by }}</code></td>

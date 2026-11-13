@@ -24,6 +24,12 @@ eigenen Entscheidungen, nach Phasen geordnet (A–K; Nachbesserungen nach dem QA
 | NPT-10 | 7782a8aa | Datenmodell | B13, D6, H6, I4 |
 | NPT-11 | 7da52b7c | Betrieb, Betriebs-Overlay, PII, Container | A2, B12, B15, J2, J8 |
 | NPT-12 | 54aaf020 | Kubernetes-Betrieb per Helm-Chart (Review ee62741e) | K1–K11 |
+| NPT-13 | 81a4f065 | News und FAQ je Projekt (Review 8c6338cd) | N1–N6 |
+| NPT-14 | 10f26fc9 | MCP-Server je Projekt (Review 8c6338cd) | M1–M8 |
+| NPT-15 | 3b885f5f | Erstinbetriebnahme im Browser, Admin-Einstellungen, Web-CA (Review 3891c7b8) | O1–O9 |
+| NPT-16 | 236a7447 | Barrierefreiheit BITV 2.0 / WCAG 2.1 AA (Review 9b73349c) | P1–P6 |
+| NPT-17 | 5bfdc981 | Gemerkter Filter projektübergreifend (Review dc62eacd) | Q1–Q5 |
+| NPT-18 | 376bb228 | Excel-Datenverbindung, MCP-Beispiele Copilot/Kiro (Review e2747cf8) | R1–R4 |
 
 ### Wichtigste Annahmen (Kurzfassung)
 
@@ -1513,3 +1519,219 @@ Wegwerf-Stack), `helm lint --strict` und `helm template | kubeconform -strict`,
   `APP_ROLE=all`, `admin,jobs` und `public` jeweils „healthy“, `docker build --no-cache` der
   Laufzeitstufe grün inkl. der beiden Gegenproben oben, `scripts/sbom.sh --scan` mit und
   ohne VEX (Zahlen wie in der Tabelle, keine VEX-Aussage ohne Treffer).
+
+## N. News und FAQ je Projekt (NPT-13, 2026-11-12)
+
+Umsetzung der ADR NPT-13 (architect 81a4f065, Review 8c6338cd, freigegeben mit Auflagen).
+
+- **N1 Datenmodell:** `project_news`, `project_faq` (Migration 0004), FK auf `projects` mit
+  `ON DELETE CASCADE`. Keine `change_seq`-Erhöhung, kein Live-NOTIFY, nicht Teil der
+  Projekt-Backups (die sichern Systemdaten); Schutz nur über die DB-Sicherung.
+- **N2 Sanitisierung:** nh3-Allowlist des Mail-Editors (jetzt `npt.richtext`) beim Speichern
+  **und** beim Ausgeben (`npt.content.render_html`); `|safe` nur auf deren Ergebnis. Quill nur
+  im Admin-Bereich, Toolbar auf die Allowlist beschränkt.
+- **N3 Rechte:** Schreiben nur in der Admin-App (mTLS, CSRF, Audit `news_*`/`faq_*`), auch in
+  abgeschlossenen/archivierten Projekten. Lesen unter `/p/<token>` mit Admission und den
+  Sicherheitsheadern der Token-Seiten, `Cache-Control: no-store`.
+- **N4 PII:** Die öffentlichen Abfragen wählen Spalten ausdrücklich, ohne
+  `created_by`/`updated_by` (Admin-Identifier); angezeigt werden nur Zeitstempel.
+- **N5 Suche:** `q` auf 200 Zeichen gekürzt, jedes Wort per ILIKE (parametrisiert, `ESCAPE` für
+  `%`, `_`, `\`) in Frage oder `answer_text` (serverseitig per `html_to_text`). Der JS-Filter
+  vergleicht nur `textContent`. Ungültige Suchen/Seitenzahlen liefern HTML statt 422.
+- **N6 Grenzen** (`npt.limits`): höchstens 1000 News und 1000 FAQ je Projekt (Zählung unter
+  `FOR UPDATE` der Projektzeile), 20 News je Seite.
+
+## M. MCP-Server je Projekt (NPT-14, 2026-11-12)
+
+Umsetzung der ADR NPT-14 (architect 10f26fc9, Review 8c6338cd).
+
+- **M1 Eigene Implementierung** (`npt.web.public_mcp`, `npt.mcp_tools`) statt mcp-SDK: keine
+  neuen Laufzeitabhängigkeiten (SBOM/VEX). JSON-RPC 2.0, Streamable HTTP, zustandslos, nur
+  `application/json`-Antworten; `initialize` (2025-11-25/2025-06-18/2025-03-26, sonst die
+  höchste), `ping`, `tools/list`, `tools/call`; Notifications 202; Batches -32600;
+  GET/DELETE 405; unbekannter `MCP-Protocol-Version`-Header 400.
+- **M2 Secret** = Projekt-Token. `POST /p/<token>/mcp` (unbekannt 404) oder `POST /mcp` mit
+  `Authorization: Bearer` (fehlend/unbekannt 401, empfohlen: Token nicht in Proxy-Logs).
+  Token-Neugenerierung sperrt sofort. Access-Log maskiert `/p/<token>`; Header und
+  Tool-Argumente werden nicht geloggt.
+- **M3 CSRF nicht anwendbar** (kein Cookie, Secret in jedem Request). Ersatz: JSON-Content-Type
+  ohne CORS, Origin-Prüfung gegen `PUBLIC_BASE_URL` (DNS-Rebinding), 64-KB-Grenze.
+- **M4 Schreibpfad** nur über `editing.update_field` mit `source="mcp"`
+  (Änderungsprotokoll-Quelle „MCP“), nur die vier *-Felder, Konfliktschutz über
+  Pflichtargument `expected`, kein force.
+- **M5 Zweck: nur Ausfüllen der Liste** (Betreiber-Entscheidung 2026-11-12, Nachtrag zu
+  NPT-14): Werkzeuge `get_project` (Lese-Info), `list_systems` (alle Einträge, alle
+  Details, Blättern/Sortierung), `search_systems` (Freitext, `affected`/`action_taken` inkl.
+  `leer`, „Feld enthält“, optional Experten-Filter; serverseitig über `npt.domain.filters`),
+  `get_system`, `update_field`. Das ursprünglich geplante `create_system` (Herkunft
+  `mcp_angelegt`, Duplikatprüfung) entfällt ersatzlos, ebenso die Erweiterung von
+  `project_systems.origin` in Migration 0004.
+- **M6 Fehler:** Fachfehler (Konflikt, Validierung, schreibgeschützt, nicht gefunden)
+  als `isError: true` mit `structuredContent`; Sättigung als HTTP 503 (`gesperrt`,
+  `ueberlastet`) bzw. 429 (`rate_limit`) mit `Retry-After` (Standard cf972533). Zusätzlich ein
+  eigenes Lese-Kontingent (10 × Schreib-Limit je Fenster und IP).
+- **M7 Grenzen:** `list_systems` limit 100 (Standard) bis 500, Eingaben mit `extra=forbid`.
+- **M8 Prompt-Injection:** Freitexte stammen von anderen Bearbeitern; `instructions` und
+  Werkzeugbeschreibung weisen darauf hin, Handbuch ebenso. Konformität mit dem offiziellen
+  MCP-SDK prüft `scripts/run-mcp-conformance.sh` (SDK nur im Wegwerf-Container).
+
+## O. Erstinbetriebnahme im Browser und Einstellungen (NPT-15, 2026-11-13)
+
+- **O1 Ort:** `/einrichtung` in der Bearbeiter-App (die Admin-App ist ohne CA/Admin nicht
+  erreichbar). Offen genau dann, wenn `instance_settings.setup_completed_at` leer ist und
+  kein Admin existiert; danach 404 auf allen Routen, ein Wiedereröffnen über das Web gibt
+  es nicht. Migration 0005 markiert Bestandsinstallationen mit Admins als eingerichtet;
+  ein gesetztes `ADMIN_BOOTSTRAP_IDS` schließt den Installer ebenfalls (Admin existiert).
+- **O2 Einrichtungscode:** 20 Zeichen Crockford-Base32 (100 Bit), in Fünfergruppen. Erzeugt
+  beim Start im Migrations-Lock, sofern keiner existiert, und einmal als WARNING-Logzeile
+  ausgegeben; in der DB liegt nur SHA-256 (hohe Entropie, kein langsamer Hash nötig). Neuer
+  Code per `python -m npt.setup_code` (rotiert). Eingabe unabhängig von Groß-/Kleinschreibung,
+  Bindestrichen und Leerzeichen.
+- **O3 Schutz der Formulare:** Code als Feld in jedem POST (wirkt als CSRF-Token,
+  `compare_digest`), Origin muss exakt `PUBLIC_BASE_URL` sein (fehlend/`null` abgelehnt;
+  die Seiten senden `Referrer-Policy: same-origin`, damit Browser einen Origin mitschicken).
+  Fehlversuche je IP: 10 je 5 min. Ist das Fenster voll, antwortet `/einrichtung` sofort
+  429, ohne den Code auszuwerten (auch einen richtigen; Pentest L1). Nach dem Abschluss
+  weist die Route POSTs schon vor dem Multipart-Parsen ab (Zustand je Prozess gemerkt, L6).
+  Kein Code in URL oder Log der Anfrage.
+- **O4 Entwurf serverseitig** (`setup_draft` JSONB). Eine Seite mit Abschnitten statt eines
+  linearen Assistenten; jede Aktion speichert sofort, erst „Abschließen“ macht wirksam –
+  in einer Transaktion (Zeile `FOR UPDATE` mit `populate_existing`, erneute Prüfung
+  „offen“ in jedem Schritt – ein paralleler Schritt nach dem Abschluss scheitert, L2).
+- **O5 Prüfungen (`npt.pki`):** CA-Bundle nur CA-Zertifikate (basicConstraints CA:TRUE),
+  nicht abgelaufen, höchstens 20 Zertifikate/256 KB, mindestens eine selbstsignierte Root
+  (nginx/OpenSSL ohne PARTIAL_CHAIN). CRL: von einer CA des Bundles signiert, nicht abgelaufen
+  (eine abgelaufene CRL sperrte alle Admins aus), ≤ 512 KB. Admin-Zertifikat: nur öffentliches
+  Zertifikat (PEM/DER, ≤ 64 KB; Dateien mit `PRIVATE KEY`/`ENCRYPTED`, PKCS#12 werden
+  abgewiesen), kein CA-Zertifikat, zeitlich gültig, Kette bis zu einer Root des Bundles.
+  Fehler mit festen Schlüsseln, nie mit Bibliothekstext.
+- **O6 Erster Admin** wird an den Aussteller-DN des hochgeladenen Zertifikats gebunden
+  (nicht `*`), weil Web-CAs zu einer Datei-CA hinzukommen können. Bei manueller Eingabe ist
+  der Aussteller Pflicht; `*` nur mit ausdrücklichem Häkchen (L4). Die Kettentiefe wird gegen
+  `ADMIN_VERIFY_DEPTH` geprüft (die App erhält denselben Wert wie das Gateway), ein laut
+  hinterlegter CRL gesperrtes Admin-Zertifikat wird abgewiesen. Audit `admin_hinzugefuegt` und `einrichtung_abgeschlossen` mit
+  Akteur `system:einrichtung`. `npt.audit` wurde aus `npt.admins` ausgelagert, damit die
+  Bearbeiter-App das Admin-Modul nicht lädt (NPT-02, Test).
+- **O7 DB als Quelle, Jobs schreibt Dateien:** `admin_ca_pem`, `admin_crl_pem`,
+  `trust_version` in `instance_settings`. Der Jobs-Prozess schreibt je Tick (15 s) atomar
+  nach `TRUST_DIR` (nur bei geändertem Inhalt) und erzeugt ein selbstsigniertes
+  EC-P-256-Serverzertifikat (825 Tage, SAN aus `ADMIN_BASE_URL`/`PUBLIC_BASE_URL`/localhost),
+  falls keines im Verzeichnis liegt; der Schlüssel (0640) verlässt das Verzeichnis nie, in
+  der DB steht nur der SHA-256-Fingerprint zur Anzeige. Compose: Volume `admin_trust` (App
+  rw, Gateway ro); Helm: emptyDir `trust` im Backend-Pod (Memory, 2 Mi; fsGroup 10001 gibt
+  dem Gateway Lesezugriff auf den Schlüssel).
+- **O8 Gateway:** `render.sh` erzeugt die Konfiguration aus dem aktuellen Dateistand:
+  Serverzertifikat Datei vor `TRUST_DIR`; Client-CA = Datei-CA ∪ Web-CA; CRL = Datei-CRL
+  (gesetzt = Pflicht) ∪ Web-CRL. Ohne Client-CA: Einrichtungsmodus (TLS ohne Client-Prüfung,
+  alles 503, nichts wird weitergeleitet). Ohne Serverzertifikat wartet der Entrypoint. Die
+  Reload-Schleife beobachtet alle Quellen, prüft im Einrichtungsmodus alle 5 s und rendert vor
+  jedem `nginx -t && nginx -s reload` neu; scheitert etwas, bleibt der geladene Stand aktiv.
+  Verhaltensänderung: Fehlt die Datei-CA, startet das Gateway nicht mehr mit Fehler, sondern
+  im Einrichtungsmodus (503) – ebenfalls ohne Zugriff.
+- **O8a Sperrlisten je CA:** Mit gesetzter CRL prüft nginx (CRL_CHECK_ALL) **jede** CA der
+  Kette. Eine Web-CRL-Datei darf deshalb mehrere CRLs enthalten und muss jede CA des
+  Web-Bundles abdecken (`crl_unvollstaendig`). Passt eine gespeicherte CRL nach einem
+  CA-Wechsel nicht mehr, wird nicht still verworfen, sondern abgelehnt (`crl_passt_nicht`, L3).
+  Für eine zusätzlich vorhandene Datei-CA ist der Betreiber verantwortlich
+  (`ADMIN_CRL_PATH`); App und Doku weisen darauf hin, prüfen kann die App das nicht.
+- **O9 Admin-Einstellungen** (`/admin/einstellungen`): Seitenname, Web-CA ersetzen/entfernen,
+  Web-CRL ersetzen/entfernen; Audit je Änderung. Aussperrschutz: Deckt die neue Web-CA das
+  eigene Admin-Zertifikat nicht ab (Kette, Tiefe, CRL-Abdeckung, Sperrung) oder wird sie
+  entfernt, ist die Bestätigung „Datei-CA deckt ab“ Pflicht; ebenso für eine Sperrliste, die
+  das eigene Zertifikat sperren würde (M1). Notausgang bei Aussperrung:
+  `python -m npt.trust_reset` leert Web-CA und Web-CRL (Audit). Defekte Zertifikate
+  (doppelte Erweiterungen, unbekannte Algorithmen) ergeben eine feste Meldung statt 500 (L5).
+  Admins aus `ADMIN_BOOTSTRAP_IDS` schließen die Einrichtung beim Start auch formal
+  (`setup_completed_at`). Die Admin-Middleware reicht dafür das geprüfte Zertifikat im
+  Request-State weiter. Seitenname je Prozess 30 s zwischengespeichert (bei Fehlern der
+  Default, nie ein Seitenfehler).
+- **Pentest-Nacharbeit 0.3.0 (2026-11-12):** tief verschachteltes JSON am MCP-Endpunkt
+  ergab 500 (`RecursionError`), jetzt -32700; VEX-Begründung Quill auf News/FAQ und
+  `npt.richtext` erweitert.
+
+## P. Barrierefreiheit (NPT-16, 2026-11-13)
+
+Umsetzung der ADR NPT-16 (architect 236a7447, Review 9b73349c). Bericht, bekannte
+Einschränkungen und Vorlage der Erklärung zur Barrierefreiheit: `docs/BARRIEREFREIHEIT.md`.
+
+- **P1 Maßstab:** BITV 2.0 / EN 301 549 v3.2.1 Kap. 9 = WCAG 2.1 A+AA, für alle
+  Oberflächen (Bearbeiter, Admin, Installer). WCAG-2.2-Kriterien werden mitgenommen, wo es
+  nichts kostet (2.5.8 Zielgröße), sind aber nicht gefordert.
+- **P2 Vendor-Bibliotheken unverändert:** Tabulator und Quill werden nicht gepatcht
+  (Prüfsummen in der SBOM, reproduzierbarer Quill-Build). Eigenes JS bessert nach dem
+  Aufbau nach: `gridA11y()` in `hauptliste.js` (Rollen `rowgroup`/`none`, tabindex der
+  Spaltenköpfe, Sortieren per Enter/Leertaste), `elementAttributes` für die Namen der Filter
+  und Editoren, `nptQuillKeyboard`/`nptQuillA11y()` in `app.js` (Tab verlässt den Editor,
+  deutsche Namen, `role=textbox` mit `aria-labelledby`).
+- **P3 Farben:** Kontraste werden nach der WCAG-Formel gerechnet und im CSS kommentiert.
+  Neue Variablen sind `--input-border` (#767f8f) und `--warn` (#8a5a00). `--line` bleibt
+  für dekorative Linien.
+- **P4 CSRF-Token 24 h** statt 12 h (WCAG 2.2.1, Ausnahme > 20 h). Eine in der Lage
+  geöffnete Liste muss einen Arbeitstag ohne Neuladen funktionieren. Bindung an
+  Scope/Sitzung und Origin-Prüfung bleiben unverändert (NPT-08).
+- **P5 Live-Hinweis per Tastatur:** Während der Zellbearbeitung führt Tab zur nächsten
+  Zelle. Deshalb bekommen „Übernehmen“/„Behalten“ die Kürzel Alt+J/Alt+N. Sie greifen in
+  der Capture-Phase, nur solange der Hinweis sichtbar ist, und stehen im Hinweistext.
+- **P6 Regressionsschutz:** `tests/e2e/a11y_smoke.py` (axe-core 4.10.3, MPL-2.0, nur im
+  E2E-Abbild, `ADD --checksum`) läuft in `run-e2e.sh` auf 24 Seitenzuständen, jeweils hell
+  und dunkel. Dazu kommen Tastatur- (Sprunglink, Fokus sichtbar) und Reflow-Prüfung
+  (320 px). `setup_smoke` prüft den Installer. Jeder Verstoß lässt die Suite scheitern.
+  Ein manueller Screenreader-Test (NVDA, VoiceOver) steht aus. Bis dahin lautet die
+  Aussage „teilweise konform“.
+
+## Q. Gemerkter Filter (NPT-17, 2026-11-13)
+
+Betreiberwunsch: Eine Suche (z. B. nach dem eigenen Namen) soll nach dem Neuladen und in
+anderen Projekten weiter gelten. ADR 5bfdc981, Review dc62eacd, Planner 4973c311.
+
+- **Q1 Speicherort Cookie** (ausdrücklicher Wunsch), nicht `localStorage`. Name
+  `npt_filter`, `Path=/p/` (alle Projekte, nicht `/admin`), `SameSite=Strict`, `Secure` bei
+  HTTPS, `Max-Age` ein Jahr. Nicht `HttpOnly`, weil nur das Skript der Liste ihn liest; der
+  Server wertet ihn nie aus und protokolliert keine Cookies. Es ist kein Sitzungs- oder
+  Authentisierungs-Cookie, CSRF-Schutz (NPT-08) und Token-Modell bleiben unberührt.
+- **Q2 Inhalt:** die kanonische Query (`npt-filter.js` `persistQuery`) aus `q`, `f.*`,
+  `sort`/`dir`. Link-Vorfilter `x.*` gehören zu einem konkreten Link (Mail „Ihre Systeme“,
+  Pivot-Drilldown) und werden nie gemerkt. Beim Lesen läuft der Wert durch denselben Parser
+  wie die URL (unbekannte Felder und Werte fallen weg). Höchstens 3800 Byte kodiert; ein
+  größerer Filter gilt nur für die Ansicht, mit Hinweis.
+- **Q3 Vorrang:** Enthält die URL Filter, Vorfilter oder Sortierung (`hasViewParams`), gilt
+  allein die URL; sonst der gemerkte Filter, der dann auch in die Adresszeile übernommen
+  wird (Link teilbar wie bisher).
+- **Q4 Schreiben nur bei Nutzeränderung:** Der gemerkte Teil wird beim Laden festgehalten
+  und nur bei Abweichung geschrieben. Deshalb überschreibt das Öffnen eines Mail-Links
+  (nur `x.*`) den gemerkten Namensfilter nicht. „Filter zurücksetzen“ leert Suche und
+  Spaltenfilter und löscht damit den Cookie (eine gewählte Sortierung bleibt wie bisher).
+- **Q5 Hinweis und Datenschutz:** Beim Wiederherstellen meldet die Statuszeile (Live-Region)
+  „Gemerkter Filter angewendet: …“ (WCAG 3.2.2/4.1.3). Funktionaler Cookie, gesetzt nur auf
+  Aktion des Nutzers, ohne Tracking (TDDDG § 25 Abs. 2 Nr. 2). Er kann den eingegebenen
+  Namen enthalten, darauf weist das Bearbeiter-Handbuch hin (gemeinsam genutzte Rechner).
+
+## R. Excel-Datenverbindung und MCP-Beispiele (NPT-18, 2026-11-13)
+
+ADR 376bb228, Review e2747cf8, Planner 080836cc.
+
+- **R1 Datenquelle = vorhandener Export:** Excel bindet `GET /p/<token>/export.xlsx` per
+  Power Query ein (Bearbeiter-Handbuch: Schritte, Formel, Aktualisierungsintervall).
+  - Kein neuer Endpunkt, kein CSV: xlsx hat typisierte Textzellen, Formelzeichen werden
+    schon als Text geschrieben, also kein CSV-Formel-Injektionsrisiko.
+  - Spaltenvertrag und Filter-Grammatik (`umfang=sicht` plus Filter) bleiben gleich.
+- **R2 WorkbookCache:** Der Export „alle“ wird je Projekt und `change_seq` pro Worker
+  zwischengespeichert (`npt.export.WorkbookCache`, höchstens 32 Projekte, Muster
+  `PivotCache`).
+  - Alle Schreibwege erhöhen `change_seq` (`lock_project`, Upload, Wiederherstellung).
+  - Die Sequenz wird vor den Zeilen gelesen: Ein Eintrag kann jünger sein als sein
+    Schlüssel, nie älter.
+  - Gefilterte Sichten werden nicht zwischengespeichert.
+- **R3 Kein ETag/304** (Abweichung von der Review-Auflage „private, no-cache“): Power
+  Query sendet keine bedingten Anfragen, ein ETag brächte nichts. `Cache-Control:
+  no-store` bleibt wie auf allen Token-Seiten.
+- **R4 Hilfe-Adressen:** Die Platzhalter `projekt_url`, `basis_url`, `mcp_url` und
+  `export_url` stammen ausschließlich aus `PUBLIC_BASE_URL`, nie aus dem Host-Header. Wer
+  die Instanz unter einer anderen Adresse betreibt, setzt `PUBLIC_BASE_URL`, und die Hilfe
+  folgt.
+  - Behoben: Die MCP-Adresse wurde als `…/p/<token>//mcp` ausgegeben (Platzhalter mit
+    abschließendem `/` plus `/mcp`).
+  - Neue MCP-Beispiele für GitHub Copilot (VS Code, `.vscode/mcp.json`, Token per
+    `inputs`/`promptString` im Geheimspeicher) und Kiro (`.kiro/settings/mcp.json`,
+    `${NPT_TOKEN}`). In der Header-Variante steht der Token in keiner Datei.
+

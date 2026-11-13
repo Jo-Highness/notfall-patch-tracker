@@ -307,6 +307,71 @@ class MailDelivery(Base):
     updated_at: Mapped[datetime] = mapped_column(server_default=_now())
 
 
+class ProjectNews(Base):
+    """News-Beitrag eines Projekts (NPT-13); ``body_html`` ist sanitisiert gespeichert."""
+
+    __tablename__ = "project_news"
+    __table_args__ = (
+        Index("ix_project_news_project_created", "project_id", "created_at"),
+        CheckConstraint("char_length(title) BETWEEN 1 AND 200", name="title_length"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(Text)
+    body_html: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(server_default=_now())
+    created_by: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(server_default=_now())
+    updated_by: Mapped[str | None] = mapped_column(Text)
+
+
+class ProjectFaq(Base):
+    """FAQ-Eintrag eines Projekts (NPT-13); ``answer_text`` ist der Plaintext fuer die Suche."""
+
+    __tablename__ = "project_faq"
+    __table_args__ = (
+        Index("ix_project_faq_project_sort", "project_id", "sort_order"),
+        CheckConstraint("char_length(question) BETWEEN 1 AND 500", name="question_length"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    question: Mapped[str] = mapped_column(Text)
+    answer_html: Mapped[str] = mapped_column(Text)
+    answer_text: Mapped[str] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(server_default=_now())
+    created_by: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(server_default=_now())
+    updated_by: Mapped[str | None] = mapped_column(Text)
+
+
+class InstanceSettings(Base):
+    """Einstellungen der Instanz (genau eine Zeile, id=1; NPT-15).
+
+    Web-verwaltete Vertrauensanker (CA-Bundle, CRL) sind Quelle der Wahrheit; der
+    Jobs-Prozess schreibt sie nach TRUST_DIR, das Gateway liest sie dort.
+    """
+
+    __tablename__ = "instance_settings"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="singleton"),
+        CheckConstraint("char_length(site_name) BETWEEN 1 AND 80", name="site_name_length"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, server_default="1")
+    site_name: Mapped[str] = mapped_column(Text, server_default="Notfall-Patch-Tracker")
+    admin_ca_pem: Mapped[str | None] = mapped_column(Text)
+    admin_crl_pem: Mapped[str | None] = mapped_column(Text)
+    trust_version: Mapped[int] = mapped_column(BigInteger, server_default="0")
+    setup_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    setup_code_hash: Mapped[str | None] = mapped_column(Text)
+    setup_draft: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    gateway_cert_sha256: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(server_default=_now())
+
+
 class AdminUser(Base):
     __tablename__ = "admin_users"
     __table_args__ = (

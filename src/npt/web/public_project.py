@@ -224,6 +224,30 @@ def systems_payload(db: Session, project: ProjectCtx, updated_since: str | None)
     }
 
 
+def export_bytes(
+    db: Session,
+    project: ProjectCtx,
+    scope: str,
+    params: list[tuple[str, str]],
+    workbooks: export.WorkbookCache,
+) -> bytes:
+    """Arbeitsmappe fuer /export.xlsx: Sicht gefiltert, „alle“ je change_seq gecacht."""
+    if scope == "sicht":
+        rows = editing.list_rows(db, project.id)
+        return export.systems_workbook(
+            [dict(r) for r in filters.apply(rows, filters.parse(params))]
+        )
+    # Excel-Datenverbindungen fragen periodisch ab: je change_seq nur einmal bauen (NPT-18)
+    meta = live.read_meta(db.connection(), project.id)
+    if meta is None:
+        raise ProjectNotFoundError
+    return workbooks.get(
+        project.id,
+        meta.change_seq,
+        lambda: export.systems_workbook(editing.list_rows(db, project.id)),
+    )
+
+
 def build_router(settings: Settings, templates: Jinja2Templates, admission: Admission) -> APIRouter:
     router = APIRouter(prefix="/p/{token}", dependencies=[Depends(admission)])
     secret = settings.CSRF_SECRET.get_secret_value().encode()
@@ -315,14 +339,13 @@ def build_router(settings: Settings, templates: Jinja2Templates, admission: Admi
                 db.rollback()
         return JSONResponse({"ok": True, "row": row}, status_code=201, headers=NO_STORE)
 
+    workbooks = export.WorkbookCache()
+
     @router.get("/export.xlsx")
     def export_xlsx(request: Request, project: ProjectDep, db: DbDep) -> Response:
         params = [(k, v) for k, v in request.query_params.multi_items() if k != "umfang"]
         scope = request.query_params.get("umfang", "alle")
-        rows = editing.list_rows(db, project.id)
-        if scope == "sicht":
-            rows = [dict(r) for r in filters.apply(rows, filters.parse(params))]
-        data = export.systems_workbook(rows)
+        data = export_bytes(db, project, scope, params, workbooks)
         name = export.download_name(
             project.name, "sicht" if scope == "sicht" else "alle", datetime.now(tz=tz)
         )
@@ -330,12 +353,17 @@ def build_router(settings: Settings, templates: Jinja2Templates, admission: Admi
 
     @router.get("/hilfe", response_class=HTMLResponse, include_in_schema=False)
     def help_page(request: Request, project: ProjectDep) -> HTMLResponse:
+        public_base = settings.PUBLIC_BASE_URL.rstrip("/")
         # Bearbeiter-Handbuch (11.2): Markdown-Quelle, sicher gerendert, Platzhalter escaped.
         title, body = handbook.render(
             "bearbeiter",
             {
                 "projekt": project.name,
-                "projekt_url": settings.PUBLIC_BASE_URL.rstrip("/") + project.base + "/",
+                # Alle Adressen aus PUBLIC_BASE_URL, nie aus dem Host-Header (NPT-18)
+                "projekt_url": public_base + project.base + "/",
+                "basis_url": public_base,
+                "mcp_url": public_base + project.base + "/mcp",
+                "export_url": public_base + project.base + "/export.xlsx?umfang=alle",
             },
         )
         return templates.TemplateResponse(

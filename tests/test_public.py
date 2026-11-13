@@ -52,7 +52,8 @@ def test_gateway_headers_have_no_effect(client: TestClient, certs: CertFactory) 
 
 def test_public_module_does_not_import_admin() -> None:
     code = (
-        "import sys, npt.web.public\n"
+        "import sys, npt.web.public, npt.web.public_content, npt.web.public_mcp, npt.mcp_tools\n"
+        "import npt.web.public_setup, npt.instance, npt.pki\n"
         "bad = [m for m in sys.modules if m.startswith('npt.web.admin') or m == 'npt.admins']\n"
         "assert not bad, bad\n"
     )

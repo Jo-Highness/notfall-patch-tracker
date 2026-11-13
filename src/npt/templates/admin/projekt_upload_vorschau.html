@@ -67,7 +67,7 @@
           <td rowspan="{{ s.conflicts | length }}">{{ s.system_name or "" }}
             {% if s.conflicts | length > 1 %}<br><label class="check"><input type="checkbox" data-check-group="{{ g }}" data-testid="conflict-row-{{ s.system_id }}"> ganze Zeile</label>{% endif %}</td>
           {% endif %}
-          <td><input type="checkbox" name="c" value="{{ key }}" data-group="{{ g }}" data-testid="conflict-take-{{ s.system_id }}-{{ c.field }}"{% if key in selected %} checked{% endif %}></td>
+          <td><input type="checkbox" name="c" value="{{ key }}" data-group="{{ g }}" aria-label="{{ fields.DISPLAY_NAMES[c.field] }} von {{ s.system_id }} übernehmen" data-testid="conflict-take-{{ s.system_id }}-{{ c.field }}"{% if key in selected %} checked{% endif %}></td>
           <td>{{ fields.DISPLAY_NAMES[c.field] }}</td>
           <td class="old">{{ show(c.field, c.old) }}</td>
           <td class="new">{{ show(c.field, c.new) }}</td>
@@ -107,7 +107,7 @@
       <table class="tbl" data-testid="list-unknown">
         <thead><tr><th>Anlegen</th><th>System-ID</th><th>Zeile</th><th>System-Name</th><th>Digital Access Zone</th><th>Anwendungsverantwortlicher</th></tr></thead>
         <tbody>{% for u in d.unknown %}<tr>
-          <td>{% if u.creatable %}<input type="checkbox" name="anlegen" value="{{ u.system_id }}" data-testid="create-{{ u.system_id }}"{% if u.system_id in create_selected %} checked{% endif %}>{% else %}<span class="hint">nicht möglich</span>{% endif %}</td>
+          <td>{% if u.creatable %}<input type="checkbox" name="anlegen" value="{{ u.system_id }}" aria-label="{{ u.system_id }} anlegen" data-testid="create-{{ u.system_id }}"{% if u.system_id in create_selected %} checked{% endif %}>{% else %}<span class="hint">nicht möglich</span>{% endif %}</td>
           <td>{{ u.system_id }}</td><td>{{ u.row or "" }}</td><td>{{ u.values.get("system_name") or "" }}</td>
           <td>{{ u.values.get("digital_access_zone") or "" }}</td><td>{{ u.values.get("app_owner") or "" }}</td></tr>{% endfor %}</tbody>
       </table>

@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Erstinbetriebnahme – {{ site_name() }}{% endblock %}
+{% block content %}
+<h1>Erstinbetriebnahme</h1>
+{% if done %}
+<div class="card" data-testid="setup-done">
+  <h2>Einrichtung abgeschlossen</h2>
+  <p>Die Einstellungen und der erste Admin sind gespeichert. Diese Seite ist ab jetzt
+    nicht mehr erreichbar.</p>
+  <ol>
+    <li>Das Gateway übernimmt die CA innerhalb von etwa 30 Sekunden (ohne Neustart).</li>
+    <li>Admin-Bereich mit dem Admin-Zertifikat im Browser öffnen:
+      {% if admin_url %}<a href="{{ admin_url }}/admin/">{{ admin_url }}/admin/</a>
+      {% else %}<code>https://&lt;gateway-host&gt;:8443/admin/</code>{% endif %}</li>
+    {% if fingerprint %}
+    <li>Nutzt das Gateway das selbstsignierte Zertifikat, zeigt der Browser eine Warnung.
+      Vergleichen Sie den SHA-256-Fingerprint, bevor Sie fortfahren:<br>
+      <code data-testid="setup-fingerprint">{{ fp_display(fingerprint) }}</code></li>
+    {% endif %}
+    <li>Weitere Admins, den Seitennamen sowie CA und Sperrliste pflegen Sie danach im
+      Admin-Bereich unter <em>Einstellungen</em> bzw. <em>Admin-Benutzer</em>.</li>
+  </ol>
+</div>
+{% elif not authed %}
+<div class="card">
+  <p>Diese Instanz ist noch nicht eingerichtet. Den <strong>Einrichtungscode</strong> finden
+    Sie im Log des App-Containers (<code>docker compose logs app | grep Einrichtungscode</code>).
+    Einen neuen Code erzeugt <code>docker compose exec app python -m npt.setup_code</code>.</p>
+  {% if origin_hint %}
+  <p class="msg msg-err">Diese Seite wurde nicht über <code>{{ origin_hint }}</code> aufgerufen.
+    Bitte die Seite über genau diese Adresse öffnen – oder <code>PUBLIC_BASE_URL</code> in der
+    <code>.env</code> korrigieren und den Container neu starten.</p>
+  {% endif %}
+  <form method="post" action="/einrichtung" class="form" autocomplete="off">
+    <input type="hidden" name="aktion" value="anmelden">
+    <label>Einrichtungscode
+      <input type="text" name="code" required maxlength="40" autofocus
+             data-testid="setup-code" spellcheck="false" autocapitalize="characters"></label>
+    <button class="btn btn-primary" type="submit" data-testid="setup-login">Weiter</button>
+  </form>
+</div>
+{% else %}
+<p class="hint">Alle Schritte werden sofort gespeichert; erst „Einrichtung abschließen“
+  macht sie wirksam. Pflicht sind Seitenname, CA und erster Admin.</p>
+
+<section class="card" id="seitenname">
+  <h2>1. Seitenname {% if 'seitenname' not in missing %}<span aria-hidden="true">✔</span><span class="visually-hidden">(erledigt)</span>{% endif %}</h2>
+  <form method="post" action="/einrichtung" class="form">
+    <input type="hidden" name="code" value="{{ code }}">
+    <input type="hidden" name="aktion" value="seitenname">
+    <label>Name, der oben auf jeder Seite und im Fenstertitel steht
+      <input type="text" name="site_name" value="{{ d.site_name }}" maxlength="80" required
+             data-testid="setup-site-name"></label>
+    <button class="btn" type="submit" data-testid="setup-site-save">Übernehmen</button>
+  </form>
+</section>
+
+<section class="card" id="ca">
+  <h2>2. CA für Admin-Zertifikate {% if 'ca' not in missing %}<span aria-hidden="true">✔</span><span class="visually-hidden">(erledigt)</span>{% endif %}</h2>
+  <p class="hint">Root-CA und ggf. Intermediate-CAs, die die Client-Zertifikate der Admins
+    ausstellen (PEM, mehrere Zertifikate in einer Datei, oder ein einzelnes DER-Zertifikat).
+    Nur öffentliche Zertifikate – keine privaten Schlüssel.</p>
+  {% if ca %}
+  <table class="tbl" data-testid="setup-ca-list">
+    <thead><tr><th>Zertifikat</th><th>gültig bis</th><th>SHA-256</th></tr></thead>
+    <tbody>
+    {% for c in ca %}
+      <tr><td>{{ c.subject }}{% if c.self_signed %} <span class="hint">(Root)</span>{% endif %}</td>
+        <td>{{ c.not_after | dt }}</td><td><code class="fp">{{ c.sha256[:16] }}…</code></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% elif d.ca_external %}
+  <p data-testid="setup-ca-external">Die CA wird per Datei bereitgestellt
+    (<code>ADMIN_PKI_DIR</code>/<code>ca-bundle.pem</code>).</p>
+  {% endif %}
+  <form method="post" action="/einrichtung" class="form" enctype="multipart/form-data">
+    <input type="hidden" name="code" value="{{ code }}">
+    <input type="hidden" name="aktion" value="ca">
+    <label>CA-Bundle (.pem/.crt/.cer)
+      <input type="file" name="ca_datei" accept=".pem,.crt,.cer,.der" required
+             data-testid="setup-ca-file"></label>
+    <button class="btn" type="submit" data-testid="setup-ca-upload">Hochladen und prüfen</button>
+  </form>
+  <form method="post" action="/einrichtung" class="form">
+    <input type="hidden" name="code" value="{{ code }}">
+    <input type="hidden" name="aktion" value="ca_extern">
+    <button class="btn btn-small" type="submit">Stattdessen: CA kommt per Datei
+      (ADMIN_PKI_DIR)</button>
+  </form>
+
+  <h3>Sperrliste (optional)</h3>
+  {% if d.crl_pem %}<p data-testid="setup-crl-ok">Sperrliste hinterlegt.</p>{% endif %}
+  <form method="post" action="/einrichtung" class="form" enctype="multipart/form-data">
+    <input type="hidden" name="code" value="{{ code }}">
+    <input type="hidden" name="aktion" value="crl">
+    <label>CRL (PEM oder DER) – <strong>für jede CA des Bundles eine</strong> (mehrere CRLs
+      hintereinander in einer PEM-Datei); muss regelmäßig erneuert werden, abgelaufen sperrt
+      sie alle Admins aus
+      <input type="file" name="crl_datei" accept=".pem,.crl,.der" required></label>
+    <button class="btn" type="submit">Hochladen und prüfen</button>
+  </form>
+  {% if d.crl_pem %}
+  <form method="post" action="/einrichtung" class="form">
+    <input type="hidden" name="code" value="{{ code }}">
+    <input type="hidden" name="aktion" value="crl_entfernen">
+    <button class="btn btn-small btn-danger" type="submit">Sperrliste entfernen</button>
+  </form>
+  {% endif %}
+</section>
+
+<section class="card" id="admin">
+  <h2>3. Erster Admin {% if 'admin' not in missing and 'admin_art' not in missing %}<span aria-hidden="true">✔</span><span class="visually-hidden">(erledigt)</span>{% endif %}</h2>
+  <p class="hint">Admins werden erkannt an: <strong>{{ kind_label }}</strong>
+    (<code>ADMIN_CERT_ID_ATTRIBUTE</code>).</p>
+  {% if d.admin %}
+  <dl class="kv" data-testid="setup-admin">
+    <dt>Identifier</dt><dd><code>{{ d.admin.identifier }}</code></dd>
+    <dt>Aussteller</dt><dd>{{ d.admin.issuer_dn if d.admin.issuer_norm != '*' else 'beliebig (jede CA des Gateways)' }}</dd>
+    {% if d.admin.display_name %}<dt>Anzeigename</dt><dd>{{ d.admin.display_name }}</dd>{% endif %}
+    {% if d.admin.chain_depth %}<dt>Kettentiefe</dt><dd>{{ d.admin.chain_depth }}
+      {% if d.admin.chain_depth > 2 %}<span class="msg-err">– ADMIN_VERIFY_DEPTH (Default 2) muss mindestens {{ d.admin.chain_depth }} sein</span>{% endif %}</dd>{% endif %}
+  </dl>
+  {% if 'admin_art' in missing %}<p class="msg msg-err">Die Identifier-Art wurde seitdem
+    geändert – bitte den Admin erneut angeben.</p>{% endif %}
+  {% endif %}
+  <form method="post" action="/einrichtung" class="form" enctype="multipart/form-data">
+    <input type="hidden" name="code" value="{{ code }}">
+    <input type="hidden" name="aktion" value="admin_zertifikat">
+    <label>Admin-Zertifikat (nur das öffentliche Zertifikat, .crt/.pem – <strong>nicht</strong>
+      die .p12-Datei)
+      <input type="file" name="admin_datei" accept=".pem,.crt,.cer,.der" required
+             data-testid="setup-admin-file"></label>
+    <label>Anzeigename (optional)
+      <input type="text" name="display_name" maxlength="200" data-testid="setup-admin-name"></label>
+    <button class="btn" type="submit" data-testid="setup-admin-upload">Aus Zertifikat übernehmen</button>
+  </form>
+  <details>
+    <summary>Identifier stattdessen von Hand eingeben</summary>
+    <form method="post" action="/einrichtung" class="form">
+      <input type="hidden" name="code" value="{{ code }}">
+      <input type="hidden" name="aktion" value="admin_manuell">
+      <label>Identifier ({{ kind_label }})
+        <input type="text" name="identifier" maxlength="1000" required></label>
+      <label>Aussteller-DN (z. B. <code>CN=Firma Issuing CA,O=Firma GmbH,C=DE</code>)
+        <input type="text" name="issuer" maxlength="1000"></label>
+      <label><input type="checkbox" name="issuer_any" value="ja"> Kein Aussteller: Admin gilt für
+        <strong>jede</strong> CA des Gateways, auch später ergänzte (nicht empfohlen)</label>
+      <label>Anzeigename (optional)
+        <input type="text" name="display_name" maxlength="200"></label>
+      <button class="btn" type="submit">Übernehmen</button>
+    </form>
+  </details>
+</section>
+
+<section class="card" id="pruefung">
+  <h2>4. Prüfung der Konfiguration</h2>
+  <p class="hint">Diese Werte stehen in der <code>.env</code> und lassen sich hier nicht ändern.</p>
+  <ul class="checklist" data-testid="setup-checks">
+    {% for c in checks %}
+    <li class="{{ 'ok' if c.ok else 'warn' }}"><strong><span aria-hidden="true">{{ '✔' if c.ok else '!' }}</span><span class="visually-hidden">{{ 'In Ordnung:' if c.ok else 'Warnung:' }}</span> {{ c.name }}</strong>: {{ c.text }}</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="card" id="abschluss">
+  <h2>5. Abschließen</h2>
+  {% if missing %}
+  <p>Es fehlt noch: {% for m in missing %}{{ {'seitenname': 'Seitenname', 'ca': 'CA', 'admin': 'erster Admin', 'admin_art': 'Admin (neu angeben)'}[m] }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+  {% endif %}
+  <form method="post" action="/einrichtung" class="form">
+    <input type="hidden" name="code" value="{{ code }}">
+    <input type="hidden" name="aktion" value="abschliessen">
+    <button class="btn btn-primary" type="submit" data-testid="setup-finish"
+            {% if missing %}disabled{% endif %}>Einrichtung abschließen</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

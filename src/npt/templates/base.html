@@ -5,20 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
-  <title>{% block title %}Notfall-Patch-Tracker{% endblock %}</title>
+  <title>{% block title %}{{ site_name() }}{% endblock %}</title>
   <link rel="stylesheet" href="{{ static_prefix }}/css/app.css">
   <script src="{{ static_prefix }}/js/app.js" defer></script>
   {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
+  <a class="skip-link" href="#inhalt">Zum Inhalt springen</a>
   <header class="topbar">
-    <span class="brand">Notfall-Patch-Tracker</span>
+    <span class="brand">{{ site_name() }}</span>
     {% block nav %}{% endblock %}
   </header>
-  <main class="{% block main_class %}content{% endblock %}">
+  <main id="inhalt" tabindex="-1" class="{% block main_class %}content{% endblock %}">
     {% if msg_ok %}<p class="msg msg-ok" role="status">{{ msg_ok }}</p>{% endif %}
     {% if msg_err %}<p class="msg msg-err" role="alert">{{ msg_err }}</p>{% endif %}
     {% block content %}{% endblock %}
   </main>
+  <span id="sr-status" class="visually-hidden" role="status" aria-live="polite"></span>
 </body>
 </html>

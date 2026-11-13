@@ -108,6 +108,52 @@ Projektseite → *Mailversand / Kampagnen* → *Neue Kampagne*:
 
 Ohne SMTP-Konfiguration (`SMTP_HOST`, `SMTP_FROM`) ist der Versand gesperrt.
 
+## News und FAQ pflegen
+
+Auf der Projektseite unter **News, FAQ und MCP-Zugang**: „News verwalten“ bzw. „FAQ
+verwalten“. Beiträge und FAQ-Einträge werden mit einem Editor geschrieben (Überschriften,
+fett, kursiv, Listen, Links mit http/https/mailto). Alles andere – Bilder, Skripte,
+Farben – entfernt der Server beim Speichern. FAQ-Einträge haben eine Reihenfolge
+(kleinere Zahl steht weiter oben; neue Einträge bekommen automatisch die nächste
+Zehnerstelle). Lesen kann jeder mit der Projekt-URL, ändern nur Admins; jede Änderung
+steht im Audit-Log. Pflegen ist auch in abgeschlossenen und archivierten Projekten möglich.
+Höchstens 1000 Beiträge bzw. FAQ-Einträge je Projekt.
+
+News und FAQ sind **nicht** Teil der Projekt-Backups (die sichern nur die Systemliste) –
+gesichert sind sie nur über die Datenbanksicherung. Beim Löschen des Projekts werden sie
+mitgelöscht.
+
+## MCP-Zugang für KI-Assistenten
+
+Die Projektseite zeigt die MCP-Adresse (`<Projekt-URL>/mcp`). Sie trägt denselben Token
+wie die Projekt-URL – also genauso vertraulich verteilen. Empfohlen ist die Variante
+`<Basis-URL>/mcp` mit Header `Authorization: Bearer <Token>`, weil der Token dann nicht
+in Proxy-Logs landet. „Token neu generieren“ sperrt Projekt-URL und MCP-Zugang sofort.
+Der MCP-Zugang dient nur dem Ausfüllen der Liste (auflisten, durchsuchen, die vier *-Felder
+setzen) – keine Administration, keine Neuanlage von Systemen. Änderungen stehen im
+Änderungsprotokoll mit der Quelle „MCP“.
+
+## Einstellungen
+
+*Einstellungen* (`/admin/einstellungen`):
+
+- **Seitenname** – steht oben auf jeder Seite und im Fenstertitel, auch bei den Bearbeitern
+  (spätestens nach 30 Sekunden).
+- **CA für Admin-Zertifikate** – Root und ggf. Intermediates, mit denen das Gateway die
+  Admin-Zertifikate prüft. Hochladen ersetzt das bisherige Bundle vollständig. Das Gateway
+  übernimmt die Änderung ohne Neustart innerhalb von etwa einer Minute. Deckt die neue CA Ihr
+  eigenes Zertifikat nicht ab, verlangt die Seite eine Bestätigung, dass eine per Datei
+  bereitgestellte CA es weiter abdeckt – sonst würden Sie sich aussperren.
+- **Sperrliste (CRL)** – für **jede** CA oben eine CRL (mehrere hintereinander in einer
+  PEM-Datei), vor dem Ablaufdatum erneuern. Eine abgelaufene oder unvollständige Sperrliste
+  sperrt **alle** Admins aus; die Seite lehnt unvollständige ab und fragt nach, wenn Ihr
+  eigenes Zertifikat gesperrt würde. Notausgang für den Betrieb:
+  `python -m npt.trust_reset`.
+- Das **Gateway-Serverzertifikat** ist ohne eigenes Zertifikat ein selbstsigniertes; die
+  Seite zeigt seinen Fingerprint zum Vergleich mit der Browserwarnung.
+
+Jede Änderung steht im *Audit-Log*.
+
 ## Admins ernennen
 
 *Admin-Benutzer*:

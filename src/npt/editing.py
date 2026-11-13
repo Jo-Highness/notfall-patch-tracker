@@ -20,7 +20,7 @@ import json
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Final, cast
+from typing import Any, Final, Literal, cast
 
 from sqlalchemy import Row, Table, insert, select, text, update
 from sqlalchemy.exc import OperationalError
@@ -92,6 +92,9 @@ class ConflictError(WriteError):
         self.row = row
 
 
+Source = Literal["ui", "mcp"]
+
+
 @contextmanager
 def busy_as_error() -> Iterator[None]:
     """Lock-/Statement-Timeout -> :class:`BusyError` (503 mit Retry-After)."""
@@ -156,6 +159,14 @@ def list_rows(session: Session, project_id: int) -> list[dict[str, Any]]:
     return [dict(r) for r in session.execute(stmt).mappings()]
 
 
+def get_row(session: Session, project_id: int, system_id: str) -> dict[str, Any] | None:
+    """Eine Zeile (Allowlist-Spalten) ohne Sperre, z. B. fuer das MCP-Werkzeug get_system."""
+    cols = [_ps.c[c] for c in PUBLIC_COLUMNS]
+    stmt = select(*cols).where(_ps.c.project_id == project_id, _ps.c.system_id == system_id)
+    row = session.execute(stmt).mappings().first()
+    return dict(row) if row is not None else None
+
+
 def _log(
     session: Session,
     *,
@@ -205,8 +216,9 @@ def update_field(
     *,
     client_ip: str | None,
     client_name: str | None,
+    source: Source = "ui",
 ) -> UpdateResult:
-    """Ein *-Feld schreiben (Bearbeiter, Quelle ``ui``)."""
+    """Ein *-Feld schreiben (Bearbeiter ``ui`` bzw. MCP-Client ``mcp``, NPT-14)."""
     if field not in fields.EDITABLE_FIELDS:
         raise InputError({field: "Feld ist nicht schreibbar"})
     try:
@@ -246,7 +258,7 @@ def update_field(
         project_id=project_id,
         seq=seq,
         system_id=system_id,
-        source="ui",
+        source=source,
         field=field,
         old=current,
         new=new_value,

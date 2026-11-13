@@ -128,11 +128,17 @@ class Settings(BaseSettings):
     CSRF_SECRET: SecretStr = SecretStr("")
     ADMIN_CERT_ID_ATTRIBUTE: IdKind = "subject_dn"
     ADMIN_BOOTSTRAP_IDS: str = ""
+    # Gleicher Wert wie beim Gateway (ssl_verify_depth); die App prueft damit hochgeladene
+    # Admin-Zertifikate und den Aussperrschutz (NPT-15).
+    ADMIN_VERIFY_DEPTH: int = Field(default=2, ge=1, le=10)
 
     # --- Betrieb ---
     LOG_LEVEL: str = "INFO"
     DISPLAY_TZ: str = "Europe/Berlin"
     BACKUP_DIR: str = "/data/backups"
+    # Verzeichnis, in das der Jobs-Prozess web-verwaltete CA/CRL und ein Rueckfall-
+    # Serverzertifikat fuer das Gateway schreibt (NPT-15); leer = aus.
+    TRUST_DIR: str = ""
 
     # --- Rate-Limits (Auftrag 5.6/8.2: Defaults, ab Phase 3 genutzt) ---
     RATE_LIMIT_WRITES: int = Field(default=30, ge=1)

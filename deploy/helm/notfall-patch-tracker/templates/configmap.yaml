@@ -39,6 +39,8 @@ data:
   POSTGRES_SSLCERT: {{ if .Values.database.tls.certKey }}{{ printf "/etc/npt-db/%s" .Values.database.tls.certKey | quote }}{{ else }}""{{ end }}
   POSTGRES_SSLKEY: {{ if .Values.database.tls.keyKey }}{{ printf "/etc/npt-db/%s" .Values.database.tls.keyKey | quote }}{{ else }}""{{ end }}
   BACKUP_DIR: /data/backups
+  TRUST_DIR: /data/trust
+  ADMIN_VERIFY_DEPTH: {{ .Values.backend.gateway.verifyDepth | quote }}
   PUBLIC_LISTEN_PORT: "8000"
   ADMIN_LISTEN_PORT: "8001"
   # Admin-Port nur auf loopback; nur der Gateway-Sidecar im selben Pod erreicht ihn (K3).

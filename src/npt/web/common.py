@@ -78,16 +78,21 @@ class BodyLimitMiddleware:
     Ausnahme im ``receive`` sonst als 400 „Body nicht lesbar" beantworten).
     """
 
-    def __init__(self, app: ASGIApp, *, max_bytes: int) -> None:
+    def __init__(
+        self, app: ASGIApp, *, max_bytes: int, path_limits: dict[str, int] | None = None
+    ) -> None:
         self.app = app
         self.max_bytes = max_bytes
+        # Exakte Pfade mit eigener Grenze (z. B. /einrichtung mit CA/CRL-Upload, NPT-15).
+        self.path_limits = path_limits or {}
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        max_bytes = self.path_limits.get(scope.get("path", ""), self.max_bytes)
         for key, value in scope.get("headers", []):
-            if key == b"content-length" and (not value.isdigit() or int(value) > self.max_bytes):
+            if key == b"content-length" and (not value.isdigit() or int(value) > max_bytes):
                 await self._send_413(send)
                 return
         received = 0
@@ -101,7 +106,7 @@ class BodyLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
-                if received > self.max_bytes:
+                if received > max_bytes:
                     rejected = True
                     if not started:
                         await self._send_413(send)
@@ -277,7 +282,10 @@ def register_db_unavailable(
         app.add_exception_handler(cls, handler)
 
 
-def make_templates(settings: Settings, static_prefix: str) -> Jinja2Templates:
+def make_templates(
+    settings: Settings, static_prefix: str, site_name: Callable[[], str] | None = None
+) -> Jinja2Templates:
+    """Jinja-Umgebung; ``site_name`` liefert den Seitennamen (NPT-15, zwischengespeichert)."""
     templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
     env = templates.env
     env.autoescape = True
@@ -290,6 +298,7 @@ def make_templates(settings: Settings, static_prefix: str) -> Jinja2Templates:
 
     env.filters["dt"] = fmt_dt
     env.globals["static_prefix"] = static_prefix
+    env.globals["site_name"] = site_name or (lambda: "Notfall-Patch-Tracker")
     return templates
 
 

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{% if single and items %}{{ items[0].title }} – {% endif %}News – {{ project.name }}{% endblock %}
+{% block nav %}{% include "public/project_nav.html" %}{% endblock %}
+{% block content %}
+{% if single %}<p><a href="{{ project.base }}/news" data-testid="news-back">← Alle News</a></p>{% else %}<h1>News</h1>{% endif %}
+<div class="news-list" data-testid="news-list">
+{% for n in items %}
+  <article class="news-item" data-testid="news-{{ n.id }}">
+    {% if single %}<h1>{{ n.title }}</h1>{% else %}<h2><a href="{{ project.base }}/news/{{ n.id }}" data-testid="news-link-{{ n.id }}">{{ n.title }}</a></h2>{% endif %}
+    <p class="news-meta">{{ n.created_at | dt }}{% if n.updated_at %} · aktualisiert {{ n.updated_at | dt }}{% endif %}</p>
+    {# Rich-Text: beim Speichern UND hier erneut mit nh3 sanitisiert (npt.content.render_html). #}
+    <div class="richtext" data-testid="news-body-{{ n.id }}">{{ n.html | safe }}</div>
+  </article>
+{% else %}
+  <p class="hint" data-testid="news-empty">Für dieses Projekt gibt es noch keine News.</p>
+{% endfor %}
+</div>
+{% if not single and pages > 1 %}
+<nav class="pager" aria-label="Seiten" data-testid="news-pager">
+  {% if page > 1 %}<a class="btn" href="{{ project.base }}/news?seite={{ page - 1 }}" data-testid="news-newer">← Neuere</a>{% endif %}
+  <span class="counter">Seite {{ page }} von {{ pages }} ({{ total }} Beiträge)</span>
+  {% if page < pages %}<a class="btn" href="{{ project.base }}/news?seite={{ page + 1 }}" data-testid="news-older">Ältere →</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

@@ -18,7 +18,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 
-from npt import editing, limits, live
+from npt import editing, instance, limits, live
 from npt.config import Settings, get_settings
 from npt.web.admission import Admission, OverloadedError
 from npt.web.common import (
@@ -34,7 +34,9 @@ from npt.web.common import (
     register_db_unavailable,
     robots_route,
 )
+from npt.web.public_content import build_content_router
 from npt.web.public_live import build_live_router
+from npt.web.public_mcp import build_mcp_router
 from npt.web.public_overview import build_overview_router
 from npt.web.public_project import (
     JSON_BODY_MAX,
@@ -42,6 +44,7 @@ from npt.web.public_project import (
     PublicError,
     build_router,
 )
+from npt.web.public_setup import build_setup_router
 
 
 def _is_api(request: Request) -> bool:
@@ -92,7 +95,11 @@ def create_public_app(
             partial(AccessLogMiddleware, settings=settings, component="public"),
             partial(SecurityHeadersMiddleware, referrer_policy="no-referrer"),
             # Rueckfallnetz ueber der fachlichen 64-KB-Pruefung (check_write, JSON-413).
-            partial(BodyLimitMiddleware, max_bytes=2 * JSON_BODY_MAX),
+            partial(
+                BodyLimitMiddleware,
+                max_bytes=2 * JSON_BODY_MAX,
+                path_limits={"/einrichtung": limits.SETUP_BODY_MAX},
+            ),
         ],
         title="Notfall-Patch-Tracker",
         docs_url=None,
@@ -104,7 +111,9 @@ def create_public_app(
     )
     app.state.settings = settings
     app.state.session_factory = session_factory
-    templates = make_templates(settings, static_prefix="/static")
+    site_name = instance.SiteNameCache(session_factory)
+    app.state.site_name = site_name
+    templates = make_templates(settings, static_prefix="/static", site_name=site_name.get)
 
     app.include_router(health_router(monitor_getter(app)))
     robots_route(app)
@@ -118,6 +127,9 @@ def create_public_app(
     app.include_router(build_router(settings, templates, admission))
     app.include_router(build_overview_router(templates, admission))
     app.include_router(build_live_router())
+    app.include_router(build_content_router(templates, admission))
+    app.include_router(build_mcp_router(settings, admission))
+    app.include_router(build_setup_router(settings, templates, admission, session_factory))
 
     @app.exception_handler(ProjectNotFoundError)
     async def not_found_handler(request: Request, exc: ProjectNotFoundError) -> Response:

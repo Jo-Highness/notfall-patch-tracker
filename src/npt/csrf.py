@@ -1,6 +1,6 @@
 """Zustandsloser CSRF-Schutz ohne Cookies (NPT-08).
 
-Token = ``<ts>.<hex(HMAC-SHA256(CSRF_SECRET, scope || "|" || ts))>``, gueltig 12 h.
+Token = ``<ts>.<hex(HMAC-SHA256(CSRF_SECRET, scope || "|" || ts))>``, gueltig 24 h.
 Scope Admin: Issuer + Identifier; Scope Bearbeiter: Projekt + token_generation.
 Zusaetzlich muss der Origin-Header exakt der Basis-URL entsprechen.
 """

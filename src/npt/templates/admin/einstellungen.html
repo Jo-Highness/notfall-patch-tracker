@@ -1,0 +1,101 @@
+{% extends "admin/layout.html" %}
+{% block title %}Einstellungen – {{ site_name() }}{% endblock %}
+{% block content %}
+<h1>Einstellungen</h1>
+{% if ok_text %}<p class="msg msg-ok" role="status">{{ ok_text }}</p>{% endif %}
+{% if form_error %}<p class="msg msg-err" role="alert" data-testid="settings-error">{{ form_error }}</p>{% endif %}
+
+<section class="card">
+  <h2>Seitenname</h2>
+  <form method="post" action="/admin/einstellungen/seitenname" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Name oben auf jeder Seite und im Fenstertitel (Bearbeiter- und Admin-Bereich)
+      <input type="text" name="site_name" value="{{ row.site_name }}" maxlength="80" required
+             data-testid="settings-site-name"></label>
+    <button class="btn btn-primary" type="submit" data-testid="settings-site-save">Speichern</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>CA für Admin-Zertifikate (im Web verwaltet)</h2>
+  <p class="hint">Das Gateway vertraut der Vereinigung aus dieser CA und einer per Datei
+    bereitgestellten CA (<code>ADMIN_PKI_DIR</code>). Änderungen wirken ohne Neustart
+    innerhalb von etwa einer Minute.</p>
+  {% if ca %}
+  <table class="tbl" data-testid="settings-ca-list">
+    <thead><tr><th>Zertifikat</th><th>gültig bis</th><th>SHA-256</th></tr></thead>
+    <tbody>
+    {% for c in ca %}
+      <tr><td>{{ c.subject }}{% if c.self_signed %} <span class="hint">(Root)</span>{% endif %}</td>
+        <td>{{ c.not_after | dt }}</td><td><code>{{ fp_display(c.sha256) }}</code></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p>{% if own_covered %}✔ Ihr Admin-Zertifikat wird von dieser CA abgedeckt.
+    {% else %}Ihr Admin-Zertifikat wird von dieser CA <strong>nicht</strong> abgedeckt
+    (es stammt aus der Datei-CA).{% endif %}</p>
+  {% else %}
+  <p data-testid="settings-ca-none">Keine Web-CA hinterlegt – das Gateway nutzt nur die Datei-CA.</p>
+  {% endif %}
+  <form method="post" action="/admin/einstellungen/ca" class="form" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Neues CA-Bundle (PEM, Root + Intermediates; ersetzt das bisherige vollständig)
+      <input type="file" name="datei" accept=".pem,.crt,.cer,.der" required data-testid="settings-ca-file"></label>
+    <label><input type="checkbox" name="bestaetigung" value="ja"> Mein Zertifikat ist über eine
+      Datei-CA abgedeckt (nur nötig, wenn die neue CA mein Zertifikat nicht abdeckt)</label>
+    <button class="btn btn-primary" type="submit" data-testid="settings-ca-save">Hochladen und prüfen</button>
+  </form>
+  {% if ca %}
+  <form method="post" action="/admin/einstellungen/ca/entfernen" class="form"
+        data-confirm="Web-CA wirklich entfernen? Ohne Datei-CA ist danach kein Admin-Zugang mehr möglich.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label><input type="checkbox" name="bestaetigung" value="ja" required> Eine Datei-CA deckt die
+      Admin-Zertifikate ab</label>
+    <button class="btn btn-danger" type="submit">Web-CA entfernen</button>
+  </form>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Sperrliste (CRL)</h2>
+  {% if crls %}
+  <ul data-testid="settings-crl">
+    {% for crl in crls %}
+    <li>Aussteller {{ crl.issuer.rfc4514_string() }}, nächste Aktualisierung
+      {{ crl.next_update_utc | dt if crl.next_update_utc else '–' }}, {{ crl | length }} gesperrte Zertifikate</li>
+    {% endfor %}
+  </ul>
+  <p><strong>Abgelaufen sperrt eine CRL alle Admins aus – rechtzeitig ersetzen.</strong>
+    Liegt zusätzlich eine Datei-CA vor, braucht auch sie eine CRL (Datei <code>ADMIN_CRL_PATH</code>).</p>
+  {% else %}
+  <p>Keine Web-Sperrliste hinterlegt.</p>
+  {% endif %}
+  <form method="post" action="/admin/einstellungen/crl" class="form" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>CRL (PEM oder DER) – für <strong>jede</strong> CA oben eine passende CRL, mehrere
+      hintereinander in einer PEM-Datei
+      <input type="file" name="datei" accept=".pem,.crl,.der" required></label>
+    <label><input type="checkbox" name="bestaetigung" value="ja"> Auch speichern, wenn mein
+      Zertifikat danach nicht mehr über die Web-CA akzeptiert würde</label>
+    <button class="btn" type="submit">Hochladen und prüfen</button>
+  </form>
+  {% if crls %}
+  <form method="post" action="/admin/einstellungen/crl/entfernen" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn btn-danger" type="submit">Sperrliste entfernen</button>
+  </form>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Gateway-Serverzertifikat</h2>
+  {% if row.gateway_cert_sha256 %}
+  <p>Rückfall-Zertifikat (selbstsigniert, nur wirksam ohne eigenes Zertifikat in
+    <code>ADMIN_PKI_DIR</code>): <code>{{ fp_display(row.gateway_cert_sha256) }}</code></p>
+  {% else %}
+  <p>Kein selbstsigniertes Rückfall-Zertifikat erzeugt (TRUST_DIR nicht eingerichtet).</p>
+  {% endif %}
+  <p class="hint">Ein eigenes Zertifikat legen Sie als <code>server.crt</code>/<code>server.key</code>
+    in <code>ADMIN_PKI_DIR</code> ab – es hat immer Vorrang.</p>
+</section>
+{% endblock %}

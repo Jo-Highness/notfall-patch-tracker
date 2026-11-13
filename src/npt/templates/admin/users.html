@@ -1,5 +1,5 @@
 {% extends "admin/layout.html" %}
-{% block title %}Admin-Benutzer – Notfall-Patch-Tracker{% endblock %}
+{% block title %}Admin-Benutzer – {{ site_name() }}{% endblock %}
 {% block content %}
 <h1>Admin-Benutzer</h1>
 <p class="hint">Identifikation über: <strong>{{ id_kind_label }}</strong>
@@ -47,7 +47,7 @@
         <td>{{ labels.ID_KIND.get(a.id_kind, a.id_kind) }}</td>
         <td>{% if a.issuer_norm == "*" %}beliebig (konfigurierte CA){% else %}<code>{{ a.issuer_norm }}</code>{% endif %}</td>
         <td>{{ a.display_name or "" }}</td>
-        <td>{{ "aktiv" if a.active else "deaktiviert" }}</td>
+        <td>{{ "aktiv" if a.active else "deaktiviert" }}{% if a.id_kind != active_kind %} (wirkungslos – andere Identifier-Art){% endif %}</td>
         <td>{{ a.created_at | dt }}<br><small>von {{ a.created_by }}</small></td>
         <td class="actions">
           {% if a.active %}

@@ -1,10 +1,10 @@
 {
   "@context": "https://openvex.dev/ns/v0.2.0",
-  "@id": "urn:notfall-patch-tracker:vex:0.2.1",
+  "@id": "urn:notfall-patch-tracker:vex:0.4.0",
   "author": "Notfall-Patch-Tracker-Projekt",
   "role": "Hersteller",
-  "timestamp": "2026-11-02T00:00:00Z",
-  "version": 1,
+  "timestamp": "2026-11-13T00:00:00Z",
+  "version": 2,
   "tooling": "von Hand gepflegt; Bewertung und Begruendung: docs/DECISIONS.md K14, Anwendung: scripts/sbom.sh --scan",
   "statements": [
     {
@@ -19,7 +19,7 @@
       "status": "not_affected",
       "timestamp": "2026-11-02T00:00:00Z",
       "justification": "inline_mitigations_already_exist",
-      "impact_statement": "XSS im HTML-Export getSemanticHTML. Quill wird nur im Admin-Mail-Editor (hinter mTLS) genutzt; das Ergebnis von getSemanticHTML wird nur in ein Formularfeld (textarea.value) geschrieben, nie ins DOM eingefuegt. Der Server bereinigt den Mailtext vor dem Speichern, der Vorschau und dem Versand mit einer nh3-Allowlist (npt.mail.sanitize); die CSP erlaubt keine Inline-Skripte (script-src 'self'). Kein behobenes Quill-Release verfuegbar (2.0.3 ist aktuell)."
+      "impact_statement": "XSS im HTML-Export getSemanticHTML. Quill wird nur in den Admin-Editoren (Mail, News, FAQ; hinter mTLS) genutzt; das Ergebnis von getSemanticHTML wird nur in ein Formularfeld (textarea.value) geschrieben, nie ins DOM eingefuegt. Der Server bereinigt Mailtext, News und FAQ-Antworten vor dem Speichern und erneut bei Vorschau, Versand bzw. Ausgabe mit einer nh3-Allowlist (npt.richtext); die CSP erlaubt keine Inline-Skripte (script-src 'self'). Kein behobenes Quill-Release verfuegbar (2.0.3 ist aktuell)."
     },
     {
       "vulnerability": {
@@ -618,6 +618,65 @@
       "timestamp": "2026-11-02T00:00:00Z",
       "action_statement": "Behoben erst in CPython 3.13+; Wechsel der Python-Linie (3.12 -> 3.13) als eigener Schritt. Bis dahin offen im Bericht.",
       "status_notes": "base64-Dekodierung ist in mehreren Abhaengigkeiten erreichbar (u. a. python-multipart, cryptography); eine Nichtbetroffenheit ist nicht belegbar."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-76844"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/zlib1g@1%3A1.3.dfsg%2Breally1.3.1-1%2Bb1"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-13T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "gz_write nach fehlgeschlagenem write(): betrifft nur die gz*-Datei-API (gzwrite/gzputs/gzprintf). Im App-Abbild importiert sie allein dpkg-deb (geprueft per nm -D --undefined-only ueber alle 568 ELF-Dateien, 2026-11-13); die Anwendung fuehrt dpkg-deb nie aus. Python (gzip, zlib, zipfile/openpyxl) arbeitet ueber deflate/inflate-Streams, nicht ueber gzwrite. Behebung (deb13u1) kommt mit dem naechsten Basisabbild."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-115819"
+      },
+      "products": [
+        {
+          "@id": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u4"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-13T00:00:00Z",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Wide-scanf-Familie (swscanf, fwscanf, wscanf und v-Varianten) mit %s/%[ ohne l: Kein Programm und keine Bibliothek im App-Abbild importiert eine dieser Funktionen (geprueft per nm -D --undefined-only, auch __isoc99_/__isoc23_-Varianten, 2026-11-13); CPython ruft sie nicht auf."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-116566"
+      },
+      "products": [
+        {
+          "@id": "pkg:generic/python@3.12.16"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-13T00:00:00Z",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "socket.getaddrinfo mit Nullbytes in host/port: Die Anwendung loest nur Hosts aus der Betreiber-Konfiguration auf (DATABASE_URL, SMTP_HOST, Stammdaten-API-URL, Probe localhost). Weiterleitungen der Stammdaten-API werden nur auf denselben Host und Port verfolgt (masterdata/api.py). Kein Hostname stammt aus Anfragen von Bearbeitern, Admins oder MCP-Clients."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-4738"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/zlib@1.3.2-r1"
+        }
+      ],
+      "status": "not_affected",
+      "timestamp": "2026-11-13T00:00:00Z",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Der Eintrag betrifft GDAL (frmts/zlib/contrib/infback9, inftree9.c) und wird ueber den Namen zlib falsch zugeordnet. Die Alpine-libz.so.1 in Gateway- und TLS-Proxy-Abbild enthaelt keinen infback9-Code (keine *back9-Symbole, geprueft per nm -D --defined-only, 2026-11-13); GDAL ist nicht installiert."
     }
   ]
 }

@@ -72,8 +72,23 @@
     p.columns.forEach(function (c) { ftr.appendChild(numCell(c.href, c.count, "colsum-" + (c.key || "leer"), "sum")); });
     ftr.appendChild(numCell(p.total_href, p.total, "total", "sum total"));
     tfoot.appendChild(ftr);
+    // Tastaturfokus auf einem Pivot-Link erhalten (WCAG 2.4.3)
+    var active = document.activeElement;
+    var keep = null;
+    if (active && active.getAttribute && (body.contains(active) || foot.contains(active))) {
+      var row = active.closest("tr");
+      keep = { tid: active.getAttribute("data-testid"), daz: row ? row.getAttribute("data-daz") : null, foot: foot.contains(active) };
+    }
     body.replaceWith(tbody);
     foot.replaceWith(tfoot);
+    if (keep && keep.tid) {
+      var scope = keep.foot ? tfoot : tbody;
+      var cands = scope.querySelectorAll('a[data-testid="' + CSS.escape(keep.tid) + '"]');
+      for (var ci = 0; ci < cands.length; ci++) {
+        var tr = cands[ci].closest("tr");
+        if (keep.foot || (tr && tr.getAttribute("data-daz") === keep.daz)) { cands[ci].focus(); break; }
+      }
+    }
     // geänderte Zahlen kurz hervorheben
     document.querySelectorAll("#pivot td a[data-testid]").forEach(function (a) {
       var key = a.getAttribute("data-testid") + "\u0000" + (a.closest("tr").getAttribute("data-daz") || "");

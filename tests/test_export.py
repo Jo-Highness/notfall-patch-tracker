@@ -103,3 +103,45 @@ def test_public_export_all_and_filtered(session_factory, public_app_factory) -> 
     ids = [ws.cell(row=i, column=1).value for i in range(2, ws.max_row + 1)]
     assert ids == ["APP-00004", "APP-00002"]
     assert "<f>" not in sheet_xml(r.content)
+
+
+def test_export_all_cached_per_change_seq(session_factory, public_app_factory) -> None:
+    """NPT-18: Excel-Datenverbindungen fragen periodisch ab – gleiche Sequenz, gleiche Bytes,
+    jede Aenderung liefert sofort den neuen Stand (auch ueber Projekte getrennt)."""
+    seed_master(session_factory, 4)
+    proj = make_project(session_factory, "Cache A")
+    other = make_project(session_factory, "Cache B")
+    ed = Editor(public_app_factory(), proj)
+    first = ed.c.get(f"{proj.base}/export.xlsx?umfang=alle")
+    again = ed.c.get(f"{proj.base}/export.xlsx")  # umfang=alle ist der Standard
+    assert first.status_code == again.status_code == 200
+    assert first.content == again.content
+    assert first.headers["cache-control"] == "no-store"
+    assert ed.patch("APP-00001", "remark", "neu nach Cache", None).status_code == 200
+    after = ed.c.get(f"{proj.base}/export.xlsx?umfang=alle")
+    assert after.content != first.content
+    ws = load_workbook(io.BytesIO(after.content)).active
+    assert ws is not None
+    values = [c.value for row in ws.iter_rows() for c in row]
+    assert "neu nach Cache" in values
+    # anderes Projekt bekommt nie den Eintrag des ersten
+    ws_b = load_workbook(io.BytesIO(ed.c.get(f"{other.base}/export.xlsx").content)).active
+    assert ws_b is not None
+    assert "neu nach Cache" not in [c.value for row in ws_b.iter_rows() for c in row]
+
+
+def test_workbook_cache_rebuilds_on_new_seq_and_evicts() -> None:
+    cache = export.WorkbookCache(max_projects=2)
+    calls: list[int] = []
+
+    def build(n: int) -> bytes:
+        calls.append(n)
+        return str(n).encode()
+
+    assert cache.get(1, 5, lambda: build(1)) == b"1"
+    assert cache.get(1, 5, lambda: build(99)) == b"1"  # Treffer, kein Neubau
+    assert cache.get(1, 6, lambda: build(2)) == b"2"  # neue Sequenz
+    cache.get(2, 1, lambda: build(3))
+    cache.get(3, 1, lambda: build(4))  # verdraengt den aeltesten Eintrag
+    assert cache.get(1, 6, lambda: build(5)) == b"5"
+    assert calls == [1, 2, 3, 4, 5]

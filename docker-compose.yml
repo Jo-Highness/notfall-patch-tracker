@@ -96,9 +96,12 @@ services:
       CSRF_SECRET: ${CSRF_SECRET:?CSRF_SECRET fehlt (.env)}
       ADMIN_CERT_ID_ATTRIBUTE: ${ADMIN_CERT_ID_ATTRIBUTE:-subject_dn}
       ADMIN_BOOTSTRAP_IDS: ${ADMIN_BOOTSTRAP_IDS:-}
+      ADMIN_VERIFY_DEPTH: ${ADMIN_VERIFY_DEPTH:-2}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DISPLAY_TZ: ${DISPLAY_TZ:-Europe/Berlin}
       BACKUP_DIR: /data/backups
+      # Web-verwaltete CA/CRL und Rueckfall-Serverzertifikat fuer das Gateway (NPT-15).
+      TRUST_DIR: /data/trust
       RATE_LIMIT_WRITES: ${RATE_LIMIT_WRITES:-30}
       RATE_LIMIT_WRITES_WINDOW_S: ${RATE_LIMIT_WRITES_WINDOW_S:-10}
       RATE_LIMIT_CREATE: ${RATE_LIMIT_CREATE:-10}
@@ -121,6 +124,7 @@ services:
       - "${PUBLIC_BIND_ADDR:-127.0.0.1}:${PUBLIC_PORT:-8080}:8000"
     volumes:
       - backups:/data/backups
+      - admin_trust:/data/trust
     networks:
       public_net: {}
       admin_net:
@@ -163,6 +167,10 @@ services:
       # Verzeichnis-Mount (nicht Einzeldatei), damit ein ersetzter CRL-/Zertifikats-
       # Inhalt ohne Container-Neustart sichtbar wird.
       - ${ADMIN_PKI_DIR:-./pki-out/gateway}:/etc/npt-gateway/pki:ro
+      # Vom Jobs-Prozess der App geschrieben (Web-CA/CRL, selbstsigniertes Rueckfall-
+      # Zertifikat, NPT-15); Datei-CA und Datei-Zertifikat oben haben Vorrang bzw. gelten
+      # zusaetzlich (CA-Vereinigung).
+      - admin_trust:/etc/npt-gateway/trust:ro
     networks:
       gateway_net: {}
       admin_net:
@@ -171,7 +179,7 @@ services:
     read_only: true
     tmpfs:
       - /etc/nginx/conf.d:size=1m
-      - /run/nginx:size=1m
+      - /run/nginx:size=4m
       - /var/cache/nginx:size=32m
       - /tmp:size=8m
     cap_drop: [ALL]
@@ -204,3 +212,4 @@ networks:
 volumes:
   db_data: {}
   backups: {}
+  admin_trust: {}

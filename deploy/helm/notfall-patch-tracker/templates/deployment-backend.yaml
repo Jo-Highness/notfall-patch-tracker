@@ -81,6 +81,10 @@ spec:
               mountPath: /tmp
             - name: backups
               mountPath: /data/backups
+            # Web-verwaltete CA/CRL + Rueckfall-Serverzertifikat fuer den Gateway-Sidecar
+            # (Jobs-Prozess schreibt, NPT-15).
+            - name: trust
+              mountPath: /data/trust
             {{- include "npt.dbTlsMount" . | nindent 12 }}
         - name: gateway
           image: {{ include "npt.image" (dict "root" . "kind" "gateway") }}
@@ -139,6 +143,9 @@ spec:
               mountPath: /etc/npt-gateway/crl
               readOnly: true
             {{- end }}
+            - name: trust
+              mountPath: /etc/npt-gateway/trust
+              readOnly: true
             - name: gw-conf
               mountPath: /etc/nginx/conf.d
             - name: gw-run
@@ -150,6 +157,8 @@ spec:
       volumes:
         - name: tmp
           emptyDir: { sizeLimit: 64Mi }
+        - name: trust
+          emptyDir: { medium: Memory, sizeLimit: 2Mi }
         - name: backups
           {{- if not $b.persistence.enabled }}
           emptyDir: {}
@@ -197,7 +206,7 @@ spec:
         - name: gw-conf
           emptyDir: { medium: Memory, sizeLimit: 1Mi }
         - name: gw-run
-          emptyDir: { medium: Memory, sizeLimit: 1Mi }
+          emptyDir: { medium: Memory, sizeLimit: 4Mi }
         - name: gw-cache
           emptyDir: { sizeLimit: 64Mi }
         - name: gw-tmp

@@ -61,7 +61,7 @@ RUN --mount=type=bind,source=scripts/check-runtime-libs.sh,target=/tmp/check-run
  && rm -rf /usr/local/lib/python3.12/site-packages/pip* /usr/local/bin/pip* \
  && groupadd --system --gid 10001 npt \
  && useradd --system --uid 10001 --gid npt --home-dir /nonexistent --shell /bin/false npt \
- && mkdir -p /data/backups && chown npt:npt /data/backups \
+ && mkdir -p /data/backups /data/trust && chown npt:npt /data/backups /data/trust \
  && NPT_PURGE_PACKAGES="$NPT_PURGE_PACKAGES" NPT_PURGE_PACKAGES_LATE="$NPT_PURGE_PACKAGES_LATE" \
     sh /tmp/purge-runtime-packages.sh /tmp/runtime-packages.txt \
  && rm -rf /var/cache/apt /var/cache/debconf /var/lib/apt /etc/apt /var/log/apt /etc/security \
@@ -89,7 +89,7 @@ CMD ["npt-run"]
 # erzeugen nur eine neue Metadaten-Schicht, die Schichten darueber bleiben im Cache.
 #   docker build --build-arg NPT_REVISION="$(git rev-parse HEAD)" \
 #                --build-arg NPT_SOURCE_URL=https://github.com/<owner>/notfall-patch-tracker .
-ARG NPT_VERSION=0.2.1
+ARG NPT_VERSION=0.5.0
 ARG NPT_REVISION=""
 ARG NPT_SOURCE_URL=""
 LABEL org.opencontainers.image.title="notfall-patch-tracker" \

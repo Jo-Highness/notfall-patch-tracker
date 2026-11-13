@@ -24,9 +24,12 @@ EXPECTED_TABLES = {
     "admin_users",
     "admin_access_requests",
     "admin_audit_log",
+    "instance_settings",
     "staged_uploads",
     "rate_limit_buckets",
     "health_probe",
+    "project_news",
+    "project_faq",
     "alembic_version",
 }
 

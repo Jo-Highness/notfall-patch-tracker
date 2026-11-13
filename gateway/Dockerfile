@@ -10,16 +10,16 @@ RUN rm -f /etc/nginx/conf.d/default.conf /docker-entrypoint.d/*.sh /docker-entry
  && apk del --no-network --quiet curl nginx-module-acme nginx-module-geoip \
       nginx-module-image-filter nginx-module-njs nginx-module-xslt
 COPY nginx.conf /etc/nginx/nginx.conf
-COPY admin.conf.template security-headers.inc /etc/npt-gateway/
-COPY entrypoint.sh crl-reload.sh /usr/local/bin/
-RUN chmod 0755 /usr/local/bin/entrypoint.sh /usr/local/bin/crl-reload.sh
+COPY admin.conf.template setup.conf.template security-headers.inc /etc/npt-gateway/
+COPY entrypoint.sh crl-reload.sh render.sh /usr/local/bin/
+RUN chmod 0755 /usr/local/bin/entrypoint.sh /usr/local/bin/crl-reload.sh /usr/local/bin/render.sh
 
 EXPOSE 8443
 STOPSIGNAL SIGQUIT
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # OCI-Metadaten (J15), Build-Args wie im App-Dockerfile.
-ARG NPT_VERSION=0.2.1
+ARG NPT_VERSION=0.5.0
 ARG NPT_REVISION=""
 ARG NPT_SOURCE_URL=""
 LABEL org.opencontainers.image.title="notfall-patch-tracker-gateway" \

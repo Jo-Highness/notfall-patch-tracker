@@ -69,6 +69,11 @@ MESSAGES_OK: dict[str, str] = {
     ),
     "mail_versand_abgebrochen": "Die noch ausstehenden Mails wurden abgebrochen.",
     "mail_kampagne_geloescht": "Die Kampagne wurde gelöscht.",
+    # News/FAQ (0.3.0, NPT-13)
+    "news_gespeichert": "Der News-Beitrag wurde gespeichert.",
+    "news_geloescht": "Der News-Beitrag wurde gelöscht.",
+    "faq_gespeichert": "Der FAQ-Eintrag wurde gespeichert.",
+    "faq_geloescht": "Der FAQ-Eintrag wurde gelöscht.",
 }
 MESSAGES_ERR: dict[str, str] = {
     "letzter_admin": "Der letzte aktive Admin kann nicht deaktiviert oder entfernt werden.",
@@ -145,6 +150,22 @@ MESSAGES_ERR: dict[str, str] = {
     "smtp_nicht_konfiguriert": "Der Mailversand ist nicht konfiguriert (SMTP_HOST fehlt).",
     "smtp_absender_fehlt": "Der Mailversand ist nicht konfiguriert (SMTP_FROM fehlt).",
     "smtp_absender_ungueltig": "SMTP_FROM bzw. SMTP_REPLY_TO ist keine gültige Adresse.",
+    # News/FAQ (0.3.0, NPT-13)
+    "news_titel_fehlt": "Bitte einen Titel angeben.",
+    "news_titel_zu_lang": "Der Titel ist zu lang (max. 200 Zeichen).",
+    "news_text_fehlt": "Bitte einen Text eingeben.",
+    "news_text_zu_lang": "Der Text ist zu lang.",
+    "news_nicht_gefunden": "News-Beitrag nicht gefunden.",
+    "faq_frage_fehlt": "Bitte eine Frage angeben.",
+    "faq_frage_zu_lang": "Die Frage ist zu lang (max. 500 Zeichen).",
+    "faq_antwort_fehlt": "Bitte eine Antwort eingeben.",
+    "faq_antwort_zu_lang": "Die Antwort ist zu lang.",
+    "faq_reihenfolge_ungueltig": (
+        "Die Reihenfolge muss eine ganze Zahl zwischen -100000 und 100000 sein."
+    ),
+    "faq_nicht_gefunden": "FAQ-Eintrag nicht gefunden.",
+    "news_zu_viele": "Höchstzahl an News-Beiträgen für dieses Projekt erreicht (1000).",
+    "faq_zu_viele": "Höchstzahl an FAQ-Einträgen für dieses Projekt erreicht (1000).",
 }
 
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}

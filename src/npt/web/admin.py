@@ -19,16 +19,18 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from npt import admins, handbook, limits, projects
+from npt import admins, handbook, instance, limits, projects
 from npt.config import Settings, get_settings
 from npt.db.session import DB_UNAVAILABLE_ERRORS
 from npt.identity import CertIdentity, IdKind
 from npt.web import (
     admin_backups,
     admin_changelog,
+    admin_content,
     admin_mail,
     admin_master,
     admin_projects,
+    admin_settings,
     admin_upload,
 )
 from npt.web.admin_auth import AdminAuthMiddleware
@@ -89,7 +91,9 @@ def create_admin_app(  # noqa: PLR0915 - Routen-Registrierung in der Factory
     )
     app.state.settings = settings
     app.state.session_factory = session_factory
-    templates = make_templates(settings, static_prefix="/admin/static")
+    site_name = instance.SiteNameCache(session_factory)
+    app.state.site_name = site_name
+    templates = make_templates(settings, static_prefix="/admin/static", site_name=site_name.get)
     kind: IdKind = settings.ADMIN_CERT_ID_ATTRIBUTE
     secret = settings.CSRF_SECRET.get_secret_value().encode()
     render = Renderer(templates, secret)
@@ -270,6 +274,8 @@ def create_admin_app(  # noqa: PLR0915 - Routen-Registrierung in der Factory
     app.include_router(admin_changelog.build_router(render, settings))
     app.include_router(admin_backups.build_router(render, settings))
     app.include_router(admin_mail.build_router(render, settings))
+    app.include_router(admin_content.build_router(render, settings))
+    app.include_router(admin_settings.build_router(render, settings, site_name))
     app.mount("/admin/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     def db_unavailable(request: Request) -> Response:

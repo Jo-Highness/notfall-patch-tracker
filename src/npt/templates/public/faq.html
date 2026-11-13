@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}FAQ – {{ project.name }}{% endblock %}
+{% block head %}<script src="{{ static_prefix }}/js/faq.js" defer></script>{% endblock %}
+{% block nav %}{% include "public/project_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Häufige Fragen (FAQ)</h1>
+<form method="get" action="{{ project.base }}/faq" class="faq-search" role="search" data-testid="faq-search-form">
+  <label for="faq-q">Suche</label>
+  <input type="search" id="faq-q" name="q" value="{{ q }}" maxlength="200" placeholder="Stichwort in Frage oder Antwort" data-testid="faq-search">
+  <button type="submit" class="btn">Suchen</button>
+  {% if q %}<a href="{{ project.base }}/faq" data-testid="faq-reset">Suche zurücksetzen</a>{% endif %}
+  <span class="counter" id="faq-count" role="status" aria-live="polite" data-testid="faq-count">{% if q %}{{ items | length }} von {{ total }} Einträgen{% else %}{{ total }} Einträge{% endif %}</span>
+</form>
+<div class="faq-list" data-testid="faq-list">
+{% for f in items %}
+  <details class="faq-item" data-testid="faq-{{ f.id }}"{% if q %} open{% endif %}>
+    <summary data-testid="faq-question-{{ f.id }}">{{ f.question }}</summary>
+    {# Rich-Text: beim Speichern UND hier erneut mit nh3 sanitisiert (npt.content.render_html). #}
+    <div class="richtext" data-testid="faq-answer-{{ f.id }}">{{ f.html | safe }}</div>
+  </details>
+{% endfor %}
+</div>
+<p class="hint" id="faq-empty" data-testid="faq-empty"{% if items %} hidden{% endif %}>{% if q or total %}Keine Treffer für diese Suche.{% else %}Für dieses Projekt gibt es noch keine FAQ.{% endif %}</p>
+{% endblock %}

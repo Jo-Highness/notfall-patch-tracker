@@ -1,5 +1,5 @@
 {% extends "admin/layout.html" %}
-{% block title %}Vorschau Stammdatenimport – Notfall-Patch-Tracker{% endblock %}
+{% block title %}Vorschau Stammdatenimport – {{ site_name() }}{% endblock %}
 {% block content %}
 {% set st = pv.staged %}{% set d = pv.diff %}{% set rep = st.report %}
 <h1>Vorschau Stammdatenimport</h1>
@@ -84,7 +84,7 @@
       <label class="check"><input type="checkbox" data-check-all="remove" data-testid="remove-all"> alle auswählen</label>
       <table class="tbl" data-testid="list-missing">
         <thead><tr><th>Entfernen</th><th>System-ID</th><th>System-Name</th><th>bereits markiert seit</th></tr></thead>
-        <tbody>{% for m in d.missing %}<tr><td><input type="checkbox" name="remove" value="{{ m.system_id }}" data-testid="remove-{{ m.system_id }}"></td><td>{{ m.system_id }}</td><td>{{ m.system_name or "" }}</td><td>{{ m.missing_since or "" }}</td></tr>{% endfor %}</tbody>
+        <tbody>{% for m in d.missing %}<tr><td><input type="checkbox" name="remove" value="{{ m.system_id }}" aria-label="{{ m.system_id }} entfernen" data-testid="remove-{{ m.system_id }}"></td><td>{{ m.system_id }}</td><td>{{ m.system_name or "" }}</td><td>{{ m.missing_since or "" }}</td></tr>{% endfor %}</tbody>
       </table>
       {% endif %}
     </details>

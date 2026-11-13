@@ -7,14 +7,13 @@ Audit-Log wird in DERSELBEN Transaktion geschrieben. Commit macht der Aufrufer.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from npt.audit import SYSTEM_ACTOR_ISSUER, Actor, audit
 from npt.db.models import AdminAccessRequest, AdminAuditLog, AdminUser
 from npt.identity import (
     ANY_ISSUER,
@@ -27,7 +26,10 @@ from npt.identity import (
 
 log = logging.getLogger("npt.admins")
 
-SYSTEM_ACTOR_ISSUER = "system"
+# Neutral ausgelagert (NPT-15): auch der Bearbeiter-Prozess (Installer) auditiert,
+# ohne dieses Admin-Modul zu laden. Hier fuer bestehende Aufrufer weitergereicht.
+__all__ = ["SYSTEM_ACTOR_ISSUER", "Actor", "AdminError", "audit"]
+
 DISPLAY_NAME_MAX = 200
 
 
@@ -39,46 +41,8 @@ class AdminError(Exception):
         self.code = code
 
 
-@dataclass(frozen=True)
-class Actor:
-    issuer: str
-    identifier: str
-    client_ip: str | None = None
-
-    @classmethod
-    def from_identity(cls, ident: CertIdentity, client_ip: str | None) -> Actor:
-        return cls(ident.issuer_norm, ident.primary, client_ip)
-
-    @classmethod
-    def system(cls, what: str) -> Actor:
-        return cls(SYSTEM_ACTOR_ISSUER, what, None)
-
-
 def _now() -> datetime:
     return datetime.now(tz=UTC)
-
-
-def audit(
-    session: Session,
-    actor: Actor,
-    action: str,
-    target: str | None = None,
-    details: dict[str, Any] | None = None,
-) -> None:
-    session.add(
-        AdminAuditLog(
-            actor_issuer=actor.issuer,
-            actor_identifier=actor.identifier,
-            action=action,
-            target=target,
-            details=details,
-            client_ip=actor.client_ip,
-        )
-    )
-    log.info(
-        "admin-aktion",
-        extra={"action": action, "actor": actor.identifier, "target": target},
-    )
 
 
 def find_active_admin(session: Session, ident: CertIdentity) -> AdminUser | None:

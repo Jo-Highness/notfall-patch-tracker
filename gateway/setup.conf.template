@@ -1,0 +1,28 @@
+# Einrichtungsmodus (NPT-15): noch keine Client-CA (weder Datei noch Web).
+# TLS ohne Client-Pruefung, nichts wird an die App weitergeleitet. Gerendert von render.sh.
+
+server {
+    listen 127.0.0.1:8080;
+    access_log off;
+    location = /gw-health { return 200 "ok\n"; }
+    location / { return 404; }
+}
+
+server {
+    listen 8443 ssl;
+    http2 on;
+    server_name _;
+
+    ssl_certificate         ${GATEWAY_TLS_CERT_EFFECTIVE};
+    ssl_certificate_key     ${GATEWAY_TLS_KEY_EFFECTIVE};
+    ssl_protocols           TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_tickets     off;
+
+    location / {
+        include /etc/nginx/conf.d/npt-security-headers.inc;
+        add_header Retry-After 30 always;
+        default_type text/plain;
+        return 503 "Admin-Zugang noch nicht eingerichtet.\nErstinbetriebnahme im Bearbeiter-Bereich unter /einrichtung (Einrichtungscode im Log des App-Containers).\n";
+    }
+}

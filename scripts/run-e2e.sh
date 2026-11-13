@@ -8,6 +8,9 @@
 #        live_smoke    Live-Update zwischen zwei Browser-Kontexten (+ Fokus, Konflikt, Polling)
 #        pivot_smoke   Pivot-Drilldown (+ Live-Aktualisierung)
 #        upload_smoke  Admin-Upload mit Konfliktbestaetigung (+ Backup/Restore)
+#        content_smoke News/FAQ (Editor, Suche) und MCP-Endpunkt (0.3.0)
+#        a11y_smoke    Barrierefreiheit: axe-core WCAG 2.1 AA, Tastatur, Reflow (0.4.0)
+#        filter_cookie_smoke Gemerkter Filter projektuebergreifend (Cookie, 0.5.0)
 #        mail_smoke    Mailversand an Mailpit (optional, E2E_MAIL=0 schaltet ab)
 #   5. Stack samt Volumes dieses Projekts entfernen (KEEP=1 behaelt ihn)
 # Exitcode 0 = alle Suiten gruen. Es werden nur Mails an den lokalen Mailpit zugestellt.
@@ -25,7 +28,7 @@ GATEWAY_PORT="${E2E_GATEWAY_PORT:-8491}"
 SUBNET="${E2E_SUBNET:-172.31.250.32/28}"
 APP_IP="${E2E_APP_IP:-172.31.250.42}"
 GW_IP="${E2E_GW_IP:-172.31.250.43}"
-SUITES="${E2E_SUITES:-inline_smoke live_smoke pivot_smoke upload_smoke}"
+SUITES="${E2E_SUITES:-inline_smoke live_smoke pivot_smoke upload_smoke content_smoke a11y_smoke filter_cookie_smoke}"
 [[ "${E2E_MAIL:-1}" == "1" && -z "${E2E_SUITES:-}" ]] && SUITES="$SUITES mail_smoke"
 E2E_IMAGE="${E2E_IMAGE:-npt-e2e}"
 

@@ -14,6 +14,7 @@
       theme: "snow",
       formats: ["header", "bold", "italic", "list", "link"],
       modules: {
+        keyboard: window.nptQuillKeyboard, // Tab verlaesst den Editor (WCAG 2.1.1, app.js)
         toolbar: [
           [{ header: [1, 2, 3, false] }],
           ["bold", "italic"],
@@ -28,6 +29,7 @@
     }
     textarea.hidden = true;
     wrap.hidden = false;
+    if (window.nptQuillA11y) { window.nptQuillA11y(quill, document.querySelector('label[for="mail-body"]')); }
     var sync = function () {
       textarea.value = quill.getText().trim() === "" ? "" : quill.getSemanticHTML();
     };

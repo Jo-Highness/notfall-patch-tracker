@@ -38,7 +38,7 @@
         <input type="text" name="custom_query" value="{{ form.custom_query }}" maxlength="20000" data-testid="mail-custom-query"
                placeholder="{{ list_base }}?f.digital_access_zone=…">
       </label>
-      <p class="hint">In der <a href="{{ list_base }}" target="_blank" rel="noopener noreferrer" data-testid="mail-open-list">Hauptliste</a>
+      <p class="hint">In der <a href="{{ list_base }}" target="_blank" rel="noopener noreferrer" data-testid="mail-open-list">Hauptliste <span class="visually-hidden">(öffnet neues Fenster)</span></a>
         filtern bzw. suchen, die Adresse aus der Adresszeile kopieren („als Mail-Zielgruppe verwenden“) und hier einfügen.
         Übernommen werden Filter und Suche, nicht die Sortierung.</p>
     </fieldset>
@@ -59,7 +59,7 @@
   </div>
   <p class="hint">Zielgruppe: <strong>{{ (selectors | selectattr("key", "equalto", c.selector) | first).name }}</strong>
     {% if selector_params %}(Filter <code data-testid="mail-selector-filter">{% for k, v in selector_params %}{{ k }}={{ v }}{% if not loop.last %}&amp;{% endif %}{% endfor %}</code>){% else %}(kein Filter – alle Systeme){% endif %}
-    – <a href="{{ selector_link }}" target="_blank" rel="noopener noreferrer" data-testid="mail-selector-link">in der Hauptliste ansehen</a></p>
+    – <a href="{{ selector_link }}" target="_blank" rel="noopener noreferrer" data-testid="mail-selector-link">in der Hauptliste ansehen <span class="visually-hidden">(öffnet neues Fenster)</span></a></p>
   {% if not has_placeholder %}<p class="msg msg-err" role="alert" data-testid="mail-no-placeholder">Der Text enthält keinen Platzhalter <code>[LINK]</code> – die Empfänger erhalten dann keine Links auf ihre Systeme.</p>{% endif %}
 
   {% if audience.recipients %}

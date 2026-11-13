@@ -59,6 +59,11 @@ def _normalize_fp(value: str) -> str:
 
 def authenticate(scope: Scope, settings: Settings) -> CertIdentity:
     """Prueft die Gateway-Angaben und liefert die Zertifikats-Identitaet."""
+    return authenticate_cert(scope, settings)[0]
+
+
+def authenticate_cert(scope: Scope, settings: Settings) -> tuple[CertIdentity, x509.Certificate]:
+    """Wie :func:`authenticate`, liefert zusaetzlich das gepruefte Zertifikat."""
     peer = direct_peer(scope)
     if not ip_in(peer, settings.gateway_networks):
         raise AuthRejectedError("Absender ist nicht das Gateway")
@@ -78,7 +83,7 @@ def authenticate(scope: Scope, settings: Settings) -> CertIdentity:
     if not hmac.compare_digest(sha1_fingerprint(cert), _normalize_fp(fingerprint)):
         raise AuthRejectedError("Fingerprint passt nicht zum Zertifikat")
     kind: IdKind = settings.ADMIN_CERT_ID_ATTRIBUTE
-    return identity_from_cert(cert, kind)
+    return identity_from_cert(cert, kind), cert
 
 
 class AdminAuthMiddleware:
@@ -91,7 +96,7 @@ class AdminAuthMiddleware:
             await self.app(scope, receive, send)
             return
         try:
-            principal = authenticate(scope, self.settings)
+            principal, cert = authenticate_cert(scope, self.settings)
         except AuthRejectedError as exc:
             log.warning(
                 "Admin-Zugriff abgelehnt",
@@ -109,5 +114,8 @@ class AdminAuthMiddleware:
             for k, v in scope.get("headers", [])
             if k not in _CERT_HEADERS and not k.startswith(b"x-ssl-client-")
         ]
-        scope.setdefault("state", {})["principal"] = principal
+        state = scope.setdefault("state", {})
+        state["principal"] = principal
+        # Fuer den Aussperrschutz beim Ersetzen der Admin-CA (NPT-15).
+        state["principal_cert"] = cert
         await self.app(scope, receive, send)

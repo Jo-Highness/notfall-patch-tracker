@@ -19,6 +19,10 @@ Legende: ✅ umgesetzt und geprüft · ⚠️ umgesetzt mit dokumentierter Einsc
 | Audit-Log aller Admin-Aktionen mit Identifier | ✅ | `admin_audit_log` in derselben Transaktion; `/admin/audit` |
 | CSRF für alle zustandsändernden Admin-Requests | ✅ | HMAC-Token (NPT-08) + exakte Origin-Prüfung; `test_csrf.py`; mTLS-Test 7 |
 | Test-PKI-Skript (Admin / Nicht-Admin / fremde CA) | ✅ | `scripts/gen-test-pki.sh` (+ gesperrtes Zertifikat, fremde CA mit gleichem DN) |
+| Erstinbetriebnahme im Browser (NPT-15): `/einrichtung` nur bis zum Abschluss, danach 404 | ✅ | 100-Bit-Code (DB nur SHA-256, Ausgabe einmal im Log), Code als Formular-Token, Origin = `PUBLIC_BASE_URL`, 10 Fehlversuche/5 min je IP, Abschluss unter Zeilensperre; `test_setup.py`, `scripts/run-setup-e2e.sh` |
+| Uploads im Installer/Einstellungen: nur öffentliche Zertifikate, CA-Prüfung, CRL-Signatur, Größen | ✅ | `npt/pki.py` (private Schlüssel/PKCS#12 abgewiesen, CA:TRUE, Root Pflicht, Kettenprüfung, abgelaufene CRL abgewiesen), Body-Grenze 1 MB nur für `/einrichtung`; `test_setup.py::TestPki` |
+| Web-CA ergänzt Datei-CA: erster Admin an Aussteller gebunden; Aussperrschutz und Audit bei CA-Änderung | ✅ | DECISIONS O6/O9; `test_setup.py::test_settings_ca_lockout_guard` |
+| Gateway ohne CA leitet nichts weiter (Einrichtungsmodus 503) | ✅ | `gateway/setup.conf.template`; `run-setup-e2e.sh` |
 
 ## 8.2 Allgemein
 

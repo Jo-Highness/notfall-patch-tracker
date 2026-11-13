@@ -355,6 +355,17 @@ weiteren Container zu.
 `adminBaseUrl` muss genau der Origin sein, den Browser der Admins verwenden (inkl. Port,
 falls nicht 443).
 
+**Erstinbetriebnahme und Web-CA (NPT-15):** Bei `admin.tls` und `admin.clientCa` (Pflicht im
+Chart) bleibt das Gateway im mTLS-Modus. Den ersten Admin legt man entweder per
+`config.adminBootstrapIds` oder im Browser unter `<publicBaseUrl>/einrichtung` an. Der Code steht im Log des
+initContainers `migrate` des zuerst gestarteten Pods
+(`kubectl logs <pod> -c migrate | grep Einrichtungscode`); einen neuen erzeugt `kubectl exec
+deploy/<release>-backend -c app -- python -m npt.setup_code`. Im Browser bzw. unter
+*Einstellungen* gepflegte CAs und CRLs stehen in der Datenbank. Der Jobs-Prozess schreibt
+sie in das emptyDir `trust` des Backend-Pods (je Pod, nach einem Neustart sofort neu), der
+Sidecar vertraut der Vereinigung mit `clientCa`. Wer CRLs nutzt, braucht für jede CA eine
+gültige CRL.
+
 ## 7. Datenbank: Pflichten des Betreibers
 
 - PostgreSQL 16, eigener Benutzer ohne Superuser-Rechte, Eigentümer der Datenbank.

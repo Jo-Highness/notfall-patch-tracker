@@ -78,7 +78,7 @@ Netze: `public_net` (Bearbeiter-Port), `admin_net` (internal, feste Subnetze, nu
   - Prüft `$ssl_client_verify` selbst noch einmal.
   - Setzt `X-SSL-Client-*` (inklusive `$ssl_client_escaped_cert`) und `X-Forwarded-*` immer selbst und überschreibt Client-Header.
   - Leitet nur `/admin` weiter.
-  - Prüft alle 60 s den Inhalt (sha256) von Serverzertifikat, Schlüssel, CA-Bundle und optionaler CRL und macht bei Änderung `nginx -t && nginx -s reload` (ursprünglich nur die CRL-mtime; NPT-12 K3).
+  - Prüft alle 60 s den Inhalt (sha256) von Serverzertifikat, Schlüssel, CA-Bundle und optionaler CRL und macht bei Änderung `nginx -t && nginx -s reload` (ursprünglich nur die CRL-mtime; NPT-12 K3). Seit NPT-15 zusätzlich die web-verwalteten Dateien in `TRUST_DIR`; vor dem Reload wird die Konfiguration neu gerendert (CA = Datei ∪ Web; ohne CA Einrichtungsmodus, Prüfung alle 5 s; §15).
 - **App-Admin-Middleware:**
   1. Die direkte Absender-IP muss in `ADMIN_GATEWAY_CIDR` liegen (nicht XFF).
   2. `X-SSL-Client-Verify == SUCCESS`.
@@ -96,7 +96,7 @@ Netze: `public_net` (Bearbeiter-Port), `admin_net` (internal, feste Subnetze, nu
 - Schlüssel ist `(issuer_norm, id_kind, identifier_norm)`. Im Bootstrap ist `issuer::id` optional; ohne Issuer gilt `*`.
 
 ## 8. CSRF (NPT-08, 6f467b67)
-- Token = `ts || HMAC-SHA256(CSRF_SECRET, scope||ts)`, gültig 12 h, Vergleich mit `compare_digest`.
+- Token = `ts || HMAC-SHA256(CSRF_SECRET, scope||ts)`, gültig 24 h (WCAG 2.2.1, NPT-16), Vergleich mit `compare_digest`.
   - Admin-Scope: Issuer und Identifier
   - Bearbeiter-Scope: Projekt und `token_generation`
 - Transport: `<meta>`-Tag, als Header `X-CSRF-Token` bzw. als Hidden-Field. Keine Cookies.
@@ -148,6 +148,31 @@ Netze: `public_net` (Bearbeiter-Port), `admin_net` (internal, feste Subnetze, nu
 - Externe PostgreSQL, Verbindungsbudget im Template geprüft; NetworkPolicies (Default-Deny), PodSecurity `restricted`, Secrets per `secretKeyRef`.
 - Liveness des backend-Pods: `python -m npt.probe` (Admin-Port + Jobs-Heartbeat); der Jobs-Prozess löscht `health_probe`-Zeilen älter als 24 h.
 
+## 13. News und FAQ (NPT-13, 81a4f065)
+- Tabellen `project_news`/`project_faq` (Cascade mit dem Projekt), keine Systemdaten: kein Live-Update, nicht in Projekt-Backups.
+- Pflege nur in der Admin-App (`npt.web.admin_content`, CSRF, Audit), Lesen unter `/p/<token>/news|faq` (`npt.web.public_content`).
+- Rich-Text mit Quill 2; nh3-Allowlist (`npt.richtext`) beim Speichern und beim Ausgeben. Öffentliche Abfragen ohne Admin-Identifier.
+- FAQ-Suche serverseitig (ILIKE je Wort über Frage und Plaintext) und als Live-Filter im Browser. Grenzen in `npt.limits`.
+
+## 14. MCP-Server (NPT-14, 10f26fc9)
+- Streamable HTTP (JSON-RPC 2.0, zustandslos, nur JSON-Antworten) in der public-App: `POST /p/<token>/mcp` und `POST /mcp` mit Bearer-Token. Eigene Implementierung, keine neue Laufzeitabhängigkeit.
+- Zweck nur Ausfüllen der Liste (Betreiber 2026-11-12): Werkzeuge `get_project`, `list_systems`, `search_systems`, `get_system`, `update_field` (nur *-Felder) über den NPT-04-Schreibpfad (`source="mcp"`). Keine Neuanlage, keine Stammdaten.
+- Admission, Rate-Limits (Lesen/Schreiben), Origin-Prüfung, 64-KB-Grenze; Sättigung als HTTP 503/429, Fachfehler als `isError`. Details M1–M8 in `docs/DECISIONS.md`.
+
+## 15. Erstinbetriebnahme im Browser (NPT-15, 3b885f5f)
+- `/einrichtung` in der Bearbeiter-App, nur solange keine Einrichtung abgeschlossen ist und
+  kein Admin existiert; danach endgültig 404. Schutz: 100-Bit-Einrichtungscode aus dem Log
+  (DB nur Hash), Origin = `PUBLIC_BASE_URL`, Rate-Limit auf Fehlversuche.
+- Schritte: Seitenname, CA-Bundle, optional CRL, erster Admin (Zertifikat-Upload, an den
+  Aussteller gebunden, Kettenprüfung), Prüfliste der `.env`; Abschluss in einer Transaktion.
+- Tabelle `instance_settings` (genau eine Zeile): Seitenname, Web-CA/CRL, `trust_version`,
+  Code-Hash, Entwurf, Fingerprint des Rückfall-Zertifikats.
+- Der Jobs-Prozess schreibt Web-CA/CRL nach `TRUST_DIR` und erzeugt dort bei Bedarf ein
+  selbstsigniertes Serverzertifikat. Das Gateway vereinigt Datei- und Web-CA (bzw. -CRL),
+  bevorzugt das Datei-Serverzertifikat und läuft ohne CA im Einrichtungsmodus (alles 503).
+- `/admin/einstellungen`: Seitenname, Web-CA und CRL mit Aussperrschutz und Audit.
+- Details O1–O9 in `docs/DECISIONS.md`.
+
 ## Abweichungen vom Auftrag (in DECISIONS.md übernommen)
 - `updated_since` ist ein Sequenz-Cursor, kein Zeitstempel (Grund: Commit-Reihenfolge; A1).
 - Die Bindeadresse des Bearbeiter-Ports ist per Env einstellbar, Default 127.0.0.1 (A2).
@@ -171,3 +196,4 @@ Netze: `public_net` (Bearbeiter-Port), `admin_net` (internal, feste Subnetze, nu
 | §2 Migrations-Lock | `pg_advisory_lock`, Bootstrap danach | `pg_try_advisory_lock`-Schleife (300 s), Bootstrap im Lock | K2 |
 | §6 Gateway-Reload | CRL-mtime | Inhalt von Zertifikat, Schlüssel, CA-Bundle und CRL | K3 |
 | §11 Betrieb | nur Compose | zusätzlich Helm-Chart für Kubernetes | K1–K11 |
+| §6 Gateway ohne CA | Start scheitert | Einrichtungsmodus (503), CA = Datei ∪ Web, Rückfall-Serverzertifikat | O8 |

@@ -10,4 +10,5 @@ docker run --rm --network none -v "$PWD:/w:ro" -w /w "$IMAGE" sh -c '
   set -e
   for f in src/npt/static/js/*.js; do node --check "$f"; echo "Syntax ok: $f"; done
   node tests/js/filter-vectors.test.js
+  node tests/js/filter-persist.test.js
 '

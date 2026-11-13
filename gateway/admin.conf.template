@@ -13,15 +13,15 @@ server {
     http2 on;
     server_name _;
 
-    ssl_certificate         ${GATEWAY_TLS_CERT_PATH};
-    ssl_certificate_key     ${GATEWAY_TLS_KEY_PATH};
+    ssl_certificate         ${GATEWAY_TLS_CERT_EFFECTIVE};
+    ssl_certificate_key     ${GATEWAY_TLS_KEY_EFFECTIVE};
     ssl_protocols           TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers off;
     ssl_session_tickets     off;
     ssl_session_cache       shared:npt_tls:5m;
 
     # mTLS: nur Zertifikate der konfigurierten CA(s).
-    ssl_client_certificate  ${ADMIN_CA_BUNDLE_PATH};
+    ssl_client_certificate  ${ADMIN_CA_EFFECTIVE};
     ssl_verify_client       on;
     ssl_verify_depth        ${ADMIN_VERIFY_DEPTH};
     include /etc/nginx/conf.d/npt-crl.inc;

@@ -63,6 +63,7 @@ CHANGE_SOURCE: Final[dict[str, str]] = {
     "admin_upload": "Admin-Upload",
     "admin": "Admin",
     "restore": "Wiederherstellung",
+    "mcp": "MCP",
 }
 
 CHANGE_ACTION: Final[dict[str, str]] = {

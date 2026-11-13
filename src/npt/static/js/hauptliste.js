@@ -24,7 +24,45 @@
   var DEBOUNCE_MS = 300;
   var EMAIL_RE = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
 
+  // ------------------------------------------------------------------ Gemerkter Filter (NPT-17)
+  // Suche, Spaltenfilter und Sortierung gelten projektuebergreifend weiter (Cookie, Path=/p/).
+  // Vorrang: Filter in der URL (geteilte Links, Mail-Links) > gemerkter Filter > keiner.
+  // Gespeichert wird nur, wenn der Nutzer den gemerkten Teil aendert; der Server liest ihn nie.
+  var FILTER_COOKIE = "npt_filter";
+  var FILTER_COOKIE_MAX = 3800;              // Bytes (kodiert), Browser-Grenze je Cookie ~4 KB
+  var FILTER_COOKIE_AGE = 365 * 24 * 3600;   // ein Jahr
+  function readFilterCookie() {
+    var parts = document.cookie ? document.cookie.split("; ") : [];
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].indexOf(FILTER_COOKIE + "=") === 0) {
+        try { return decodeURIComponent(parts[i].slice(FILTER_COOKIE.length + 1)); } catch (e) { return ""; }
+      }
+    }
+    return "";
+  }
+  function writeFilterCookie(value) {
+    var attrs = "; Path=/p/; SameSite=Strict" + (window.location.protocol === "https:" ? "; Secure" : "");
+    if (!value) {
+      document.cookie = FILTER_COOKIE + "=" + attrs + "; Max-Age=0";
+      return true;
+    }
+    var enc = encodeURIComponent(value);
+    if (enc.length > FILTER_COOKIE_MAX) { return false; }
+    document.cookie = FILTER_COOKIE + "=" + enc + attrs + "; Max-Age=" + FILTER_COOKIE_AGE;
+    return true;
+  }
+
   var state = F.parse(window.location.search);
+  var restoredFilter = false;
+  if (!F.hasViewParams(window.location.search)) {
+    var savedState = F.parse(readFilterCookie());
+    savedState.exact = {};
+    if (F.persistQuery(savedState)) {
+      state = savedState;
+      restoredFilter = true;
+    }
+  }
+  var persisted = F.persistQuery(state);   // Ausgangsstand; geschrieben wird nur bei Abweichung
   var known = {};      // system_id -> {feld: zuletzt bestätigter Serverwert}
   var pending = {};    // "id\u0000feld" -> Speicherzustand
   var table = null;
@@ -241,6 +279,23 @@
     var url = window.location.pathname + (q ? "?" + q : "");
     window.history.replaceState(null, "", url);
     $("export-view").href = base + "/export.xlsx?umfang=sicht" + (q ? "&" + q : "");
+    rememberFilter();
+  }
+  function rememberFilter() {
+    var p = F.persistQuery(state);
+    if (p === persisted) { return; }
+    persisted = p;
+    if (!writeFilterCookie(p)) {
+      setStatus("Dieser Filter ist zu umfangreich zum Merken – er gilt nur für diese Ansicht.", "warn");
+    }
+  }
+  function describeRestored() {
+    var parts = [];
+    if (state.q) { parts.push("Suche „" + state.q + "“"); }
+    var cols = Object.keys(state.contains).concat(Object.keys(state.enums)).map(fieldTitle);
+    if (cols.length) { parts.push("Spaltenfilter " + cols.join(", ")); }
+    if (state.sort) { parts.push("Sortierung " + fieldTitle(state.sort) + (state.desc ? " absteigend" : "")); }
+    return "Gemerkter Filter angewendet: " + parts.join(" · ") + ". „Filter zurücksetzen“ hebt ihn auf.";
   }
   function renderPrefilters() {
     var box = $("prefilters");
@@ -262,7 +317,7 @@
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "chip-remove";
-      btn.setAttribute("aria-label", "Vorfilter entfernen");
+      btn.setAttribute("aria-label", "Vorfilter " + fieldTitle(field) + " entfernen");
       btn.setAttribute("data-testid", "prefilter-remove-" + field);
       btn.textContent = "×";
       btn.addEventListener("click", function () {
@@ -321,10 +376,12 @@
         values[cfg.emptyKey] = cfg.emptyLabel;
         Object.keys(c.enum).forEach(function (k) { values[k] = c.enum[k]; });
         def.headerFilter = "list";
-        def.headerFilterParams = { values: values, multiselect: true, clearable: true };
+        def.headerFilterParams = { values: values, multiselect: true, clearable: true,
+          elementAttributes: { "aria-label": "Filter " + c.title } };
         def.headerFilterPlaceholder = "alle";
       } else {
         def.headerFilter = "input";
+        def.headerFilterParams = { elementAttributes: { "aria-label": "Filter " + c.title + " (enthält)" } };
         def.headerFilterPlaceholder = "enthält …";
       }
       if (c.editable) {
@@ -334,13 +391,13 @@
           var opts = { "": cfg.emptyLabel };
           Object.keys(c.enum).forEach(function (k) { opts[k] = c.enum[k]; });
           def.editor = "list";
-          def.editorParams = { values: opts };
+          def.editorParams = { values: opts, elementAttributes: { "aria-label": c.title } };
         } else if (c.field === "remark") {
           def.editor = "textarea";
-          def.editorParams = { elementAttributes: { maxlength: String(c.maxlength) }, verticalNavigation: "editor" };
+          def.editorParams = { elementAttributes: { maxlength: String(c.maxlength), "aria-label": c.title }, verticalNavigation: "editor" };
         } else {
           def.editor = "input";
-          def.editorParams = { elementAttributes: { maxlength: String(c.maxlength) } };
+          def.editorParams = { elementAttributes: { maxlength: String(c.maxlength), "aria-label": c.title } };
         }
       }
       return def;
@@ -363,6 +420,35 @@
     counter.textContent = shown + " von " + total + " Systemen angezeigt";
   }
 
+  // ------------------------------------------------------------------ Barrierefreiheit (NPT-16)
+  // Tabulator-DOM nachbessern: gueltige grid-Struktur (WCAG 4.1.2) und Sortieren per Tastatur
+  // (WCAG 2.1.1). aria-sort setzt Tabulator selbst.
+  function gridA11y() {
+    var grid = $("grid");
+    grid.setAttribute("aria-label", "Systeme");
+    var holder = grid.querySelector(".tabulator-tableholder");
+    var inner = grid.querySelector(".tabulator-tableholder > .tabulator-table");
+    if (holder && inner) {
+      holder.setAttribute("role", "rowgroup");
+      inner.setAttribute("role", "none");
+    }
+    grid.querySelectorAll(".tabulator-col.tabulator-sortable").forEach(function (col) {
+      col.setAttribute("tabindex", "0");
+    });
+  }
+  function onHeaderKey(ev) {
+    if (ev.key !== "Enter" && ev.key !== " ") { return; }
+    var col = ev.target;
+    if (!(col instanceof HTMLElement) || !col.classList.contains("tabulator-sortable")) { return; }
+    var field = col.getAttribute("tabulator-field");
+    if (!field || !table) { return; }
+    ev.preventDefault();
+    var cur = table.getSorters().filter(function (s) { return s.field === field; })[0];
+    var dir = cur && cur.dir === "asc" ? "desc" : "asc";
+    table.setSort(field, dir);
+    window.nptAnnounce(fieldTitle(field) + (dir === "asc" ? " aufsteigend" : " absteigend") + " sortiert");
+  }
+
   // ------------------------------------------------------------------ Aufbau
   function build(rows) {
     rows.forEach(function (r) {
@@ -375,7 +461,8 @@
     var opts = {
       data: rows,
       index: "system_id",
-      height: "calc(100vh - 14.5rem)",
+      // Mindesthoehe: bei Zoom/kleinem Fenster scrollt die Seite statt die Tabelle auf 0 zu druecken (WCAG 1.4.10)
+      height: "max(20rem, calc(100vh - 14.5rem))",
       layout: "fitData",
       renderVertical: "virtual",
       placeholder: "Keine Systeme für diese Filter.",
@@ -389,6 +476,7 @@
     if (state.sort) { opts.initialSort = [{ column: state.sort, dir: state.desc ? "desc" : "asc" }]; }
     $("grid").classList.toggle("is-readonly", readOnly);
     table = new Tabulator("#grid", opts);
+    $("grid").addEventListener("keydown", onHeaderKey);
     table.on("tableBuilt", function () {
       table.setFilter(function (data) {
         if (state.q && !F.matchesGlobal(data, state.q)) { return false; }
@@ -400,6 +488,7 @@
       renderPrefilters();
       updateCounter();
       syncUrl();
+      gridA11y();
     });
     table.on("dataFiltered", function () {
       readHeaderFilters();
@@ -466,9 +555,24 @@
       });
     }
     function showErrors(errors) {
+      var first = null;
       form.querySelectorAll("[data-error-for]").forEach(function (el) {
-        el.textContent = errors[el.getAttribute("data-error-for")] || "";
+        var name = el.getAttribute("data-error-for");
+        var msg = errors[name] || "";
+        el.textContent = msg;
+        el.id = "err-" + name;
+        var input = form.elements[name];
+        if (!input || !input.setAttribute) { return; }
+        if (msg) {
+          input.setAttribute("aria-invalid", "true");
+          input.setAttribute("aria-describedby", el.id);
+          if (!first) { first = input; }
+        } else {
+          input.removeAttribute("aria-invalid");
+          input.removeAttribute("aria-describedby");
+        }
       });
+      if (first) { first.focus(); }
     }
     function ownerValid(text) {
       var parts = text.split(/[;,]/).map(function (p) { return p.trim(); }).filter(Boolean);
@@ -667,7 +771,7 @@
   function showHint(sid, field, value) {
     hint = { sid: sid, field: field, value: value };
     $("live-hint-text").textContent = "Wert wurde von anderer Person geändert: " + fieldTitle(field) +
-      " von " + sid + " ist jetzt „" + label(field, value) + "“.";
+      " von " + sid + " ist jetzt „" + label(field, value) + "“. Tastatur: Alt+J übernehmen, Alt+N eigenen Wert behalten.";
     $("live-hint").hidden = false;
   }
   function hideHint() {
@@ -691,6 +795,12 @@
       window.setTimeout(drain, 0);
       setStatus("Wert der anderen Person übernommen: " + h.sid + " · " + fieldTitle(h.field), "ok");
     });
+    // Tastaturbedienung waehrend der Zellbearbeitung (Tab wuerde zur naechsten Zelle springen)
+    document.addEventListener("keydown", function (ev) {
+      if (!hint || !ev.altKey || ev.ctrlKey || ev.metaKey) { return; }
+      if (ev.code === "KeyJ") { ev.preventDefault(); ev.stopPropagation(); $("live-hint-take").click(); }
+      else if (ev.code === "KeyN") { ev.preventDefault(); ev.stopPropagation(); $("live-hint-keep").click(); }
+    }, true);
     $("live-hint-keep").addEventListener("click", function () {
       if (!hint) { return; }
       // bewusst behalten: der gezeigte Wert gilt als bekannt, Speichern überschreibt ihn
@@ -826,7 +936,8 @@
     .then(function (data) {
       cursor = data.seq;
       build(data.rows);
-      setStatus(data.rows.length + " Systeme geladen (" + ((window.performance.now() - t0) / 1000).toFixed(1) + " s).", "");
+      var loaded = data.rows.length + " Systeme geladen (" + ((window.performance.now() - t0) / 1000).toFixed(1) + " s).";
+      if (restoredFilter) { setStatus(loaded + " " + describeRestored(), "ok"); } else { setStatus(loaded, ""); }
       setupCreate();
       startLive();
     })

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import io
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Final
 
@@ -116,3 +116,29 @@ def attachment_headers(file_name: str) -> dict[str, str]:
         "content-disposition": f'attachment; filename="{file_name}"',
         "cache-control": "no-store",
     }
+
+
+class WorkbookCache:
+    """Export „alle“ je Projekt und ``change_seq`` (pro Worker-Prozess, NPT-18).
+
+    Excel-Datenverbindungen (Power Query) rufen den Export periodisch ab, oft viele
+    Arbeitsmappen gleichzeitig. Jede Schreibtransaktion eines Projekts erhoeht
+    ``change_seq`` (NPT-05, auch Upload und Wiederherstellung); solange er gleich bleibt,
+    ist die Arbeitsmappe byte-identisch und wird nur einmal je Worker gebaut. Wie beim
+    ``PivotCache`` wird die Sequenz vor dem Lesen der Zeilen ermittelt: ein Eintrag kann
+    juenger sein als sein Schluessel, nie aelter.
+    """
+
+    def __init__(self, max_projects: int = 32) -> None:
+        self._max = max_projects
+        self._data: dict[int, tuple[int, bytes]] = {}
+
+    def get(self, project_id: int, seq: int, build: Callable[[], bytes]) -> bytes:
+        hit = self._data.get(project_id)
+        if hit is not None and hit[0] == seq:
+            return hit[1]
+        data = build()
+        if len(self._data) >= self._max and project_id not in self._data:
+            self._data.pop(next(iter(self._data)))
+        self._data[project_id] = (seq, data)
+        return data
